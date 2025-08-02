@@ -165,6 +165,145 @@ export const MESSAGE_REACTION = {
 } as const;
 
 /**
+ * Event names for different services
+ */
+export const EVENTS = {
+  // Message service events
+  MESSAGE: {
+    SEND_START: 'send_start',
+    SEND_SUCCESS: 'send_success',
+    SEND_ERROR: 'send_error',
+    AUTH_START: 'auth_start',
+    AUTH_SUCCESS: 'auth_success',
+    AUTH_ERROR: 'auth_error',
+    PARAM_VALIDATION_FAIL: 'param_validation_fail',
+  },
+
+  // Status service events
+  STATUS: {
+    STATUS_CHANGE: 'status_change',
+    STATUS_CHECK: 'status_check',
+    STATUS_ERROR: 'status_error',
+    STATUS_TIMEOUT: 'status_timeout',
+  },
+
+  // Webhook service events
+  WEBHOOK: {
+    WEBHOOK_RECEIVED: 'webhook_received',
+    WEBHOOK_VERIFIED: 'webhook_verified',
+    WEBHOOK_INVALID: 'webhook_invalid',
+    WEBHOOK_PARSE_ERROR: 'webhook_parse_error',
+    SIGNATURE_ERROR: 'signature_error',
+  },
+} as const;
+
+/**
+ * Valid webhook event types from Loop API
+ */
+export const WEBHOOK_TYPES = {
+  MESSAGE_INBOUND: 'message_inbound',
+  MESSAGE_SENT: 'message_sent',
+  MESSAGE_FAILED: 'message_failed',
+  MESSAGE_SCHEDULED: 'message_scheduled',
+  MESSAGE_TIMEOUT: 'message_timeout',
+  MESSAGE_REACTION: 'message_reaction',
+  GROUP_CREATED: 'group_created',
+  CONVERSATION_INITED: 'conversation_inited',
+} as const;
+
+/**
+ * Valid service types
+ */
+export const SERVICES = {
+  IMESSAGE: 'imessage',
+  SMS: 'sms',
+} as const;
+
+/**
+ * Validation patterns and arrays
+ */
+export const VALIDATION = {
+  /** Valid message effects */
+  EFFECTS: [
+    'slam',
+    'loud',
+    'gentle',
+    'invisibleInk',
+    'echo',
+    'spotlight',
+    'balloons',
+    'confetti',
+    'love',
+    'lasers',
+    'fireworks',
+    'shootingStar',
+    'celebration',
+  ] as const,
+
+  /** Valid message reactions */
+  REACTIONS: [
+    'love',
+    'like',
+    'dislike',
+    'laugh',
+    'exclaim',
+    'question',
+    '-love',
+    '-like',
+    '-dislike',
+    '-laugh',
+    '-exclaim',
+    '-question',
+  ] as const,
+
+  /** Valid service types */
+  SERVICES: ['imessage', 'sms'] as const,
+
+  /** Phone number regex pattern */
+  PHONE_REGEX: /^\+[0-9]{5,15}$/,
+
+  /** Email regex pattern */
+  EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+} as const;
+
+/**
+ * Error messages
+ */
+export const ERROR_MESSAGES = {
+  MISSING_CONFIG:
+    'Missing required config: loopAuthKey, loopSecretKey, and senderName are required.',
+  MISSING_WEBHOOK_SECRET:
+    'Missing required config: webhookSecretKey is required for webhook verification',
+  INVALID_PHONE: 'Phone number must start with + and contain 5-15 digits',
+  INVALID_EMAIL: 'Invalid email format',
+  MISSING_TEXT: 'Text is required',
+  TEXT_TOO_LONG: (max: number) => `Text exceeds maximum length of ${max} characters`,
+  URL_NOT_HTTPS: 'URL must use HTTPS protocol',
+  INVALID_URL: 'Invalid URL format',
+  TOO_MANY_ATTACHMENTS: (max: number) => `Maximum of ${max} attachments allowed`,
+  PASSTHROUGH_TOO_LONG: (max: number) => `Passthrough exceeds maximum length of ${max} characters`,
+  INVALID_EFFECT: (valid: readonly string[]) =>
+    `Invalid effect. Must be one of: ${valid.join(', ')}`,
+  INVALID_REACTION: (valid: readonly string[]) =>
+    `Invalid reaction. Must be one of: ${valid.join(', ')}`,
+  INVALID_SERVICE: (valid: readonly string[]) =>
+    `Invalid service. Must be one of: ${valid.join(', ')}`,
+  SMS_NO_EMAIL: 'Cannot send SMS to an email address',
+  SMS_NO_GROUP: 'Cannot send SMS to a group',
+  SMS_NO_FEATURES: 'SMS does not support subject, effect, or reply_to_id parameters',
+  MIN_TIMEOUT: (min: number) => `Timeout must be at least ${min} seconds`,
+  MISSING_SIGNATURE: 'Missing webhook signature header',
+  INVALID_SIGNATURE: 'Invalid webhook signature',
+  WEBHOOK_VERIFICATION_FAILED: 'Failed to verify webhook signature',
+  WEBHOOK_MISSING_FIELDS: 'Invalid webhook payload: missing required fields',
+  WEBHOOK_INVALID_JSON: 'Invalid webhook payload: invalid JSON',
+  MUTUAL_EXCLUSIVE: 'Provide either recipient or group, not both',
+  EFFECT_AND_REACTION: 'Cannot use both effect and reaction in the same request',
+  AUDIO_NEEDS_URL: 'media_url for audio message',
+  REACTION_NEEDS_ID: 'message_id for reaction',
+} as const;
+
+/**
  * Default configuration values
  */
 export const DEFAULTS = {
@@ -176,4 +315,10 @@ export const DEFAULTS = {
 
   /** Default timeout for waiting for a status change (in ms) */
   STATUS_TIMEOUT: 30000,
+
+  /** Default log level for services */
+  LOG_LEVEL: 'info' as const,
+
+  /** Default auto-respond setting for webhooks */
+  WEBHOOK_AUTO_RESPOND: true,
 };

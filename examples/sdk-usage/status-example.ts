@@ -5,16 +5,9 @@
  * This example demonstrates how to check the status of sent messages,
  * how to track message delivery, and how to implement polling for status updates.
  */
-import { MessageStatusChecker, LoopMessageService, LoopMessageError } from '../src';
-import type { MessageStatus, MessageStatusResponse } from '../src';
-import {
-  API_CREDENTIALS,
-  SENDER_CONFIG,
-  LOGGER_CONFIG,
-  printHeader,
-  printDivider,
-  validateConfig,
-} from './config';
+import { MessageStatusChecker, LoopMessageService, LoopMessageError } from '../../src';
+import type { MessageStatusResponse } from '../../src';
+import { API_CREDENTIALS, SENDER_CONFIG, LOGGER_CONFIG, printHeader } from '../config';
 
 // Custom interface extending MessageStatusResponse with additional properties
 interface ExtendedMessageStatus extends MessageStatusResponse {

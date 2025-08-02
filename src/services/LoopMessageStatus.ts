@@ -1,20 +1,15 @@
 /**
  * LoopMessageStatus - Service for checking message status via the Loop Message API
  */
-import { API, DEFAULTS, MESSAGE_STATUS } from '../constants.js';
+import { API, DEFAULTS, MESSAGE_STATUS, EVENTS } from '../constants.js';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import type { StatusServiceConfig } from '../LoopCredentials.js';
 import type { MessageStatus, MessageStatusResponse } from '../types.js';
-import { LoopHttpClient } from '../utils/LoopHttpClient.js';
-import { EventService } from '../utils/EventService.js';
+import { LoopHttpClient } from '../utils/loopHttpClient.js';
+import { EventService } from '../utils/eventService.js';
 
-// Status update event names
-export const STATUS_EVENTS = {
-  STATUS_CHANGE: 'status_change',
-  STATUS_CHECK: 'status_check',
-  STATUS_ERROR: 'status_error',
-  STATUS_TIMEOUT: 'status_timeout',
-};
+// Status update event names - exported from constants
+export const STATUS_EVENTS = EVENTS.STATUS;
 
 /**
  * Service for checking message status via the Loop Message API
@@ -29,12 +24,10 @@ export class MessageStatusChecker extends EventService {
    */
   constructor(config: StatusServiceConfig) {
     // Initialize the EventService base class
-    super(config.logLevel || 'info');
+    super();
 
     // Create the HTTP client
     this.statusClient = new LoopHttpClient(config, 'status');
-
-    this.logger.debug('MessageStatusChecker initialized');
   }
 
   /**
@@ -47,21 +40,19 @@ export class MessageStatusChecker extends EventService {
   async checkStatus(messageId: string): Promise<MessageStatusResponse> {
     if (!messageId) {
       const error = LoopMessageError.missingParamError('messageId');
-      this.emitError(error);
+      this.emit('error', error);
       throw error;
     }
 
     try {
-      this.logger.debug(`Checking status for message: ${messageId}`);
-      this.emitEvent(STATUS_EVENTS.STATUS_CHECK, { messageId });
+      this.emit(STATUS_EVENTS.STATUS_CHECK, { messageId });
 
       // Using the LoopHttpClient which already has retry logic
       const response = await this.statusClient.get<MessageStatusResponse>(
         `${API.ENDPOINTS.STATUS}${messageId}/`
       );
 
-      this.logger.debug(`Status check result: ${response.status} for message: ${messageId}`);
-      this.emitEvent(STATUS_EVENTS.STATUS_CHECK, {
+      this.emit(STATUS_EVENTS.STATUS_CHECK, {
         messageId,
         status: response,
       });
@@ -69,7 +60,7 @@ export class MessageStatusChecker extends EventService {
       return response;
     } catch (error) {
       // Emit the error event before rethrowing
-      this.emitEvent(STATUS_EVENTS.STATUS_ERROR, { messageId, error });
+      this.emit(STATUS_EVENTS.STATUS_ERROR, { messageId, error });
 
       // The HTTP client already handles and transforms errors
       throw error;
@@ -102,11 +93,6 @@ export class MessageStatusChecker extends EventService {
 
     const targetStatuses = Array.isArray(targetStatus) ? targetStatus : [targetStatus];
 
-    this.logger.debug(
-      `Waiting for message ${messageId} to reach status: [${targetStatuses.join(', ')}]`,
-      { maxAttempts, delayMs, timeoutMs }
-    );
-
     let attempts = 0;
     const startTime = Date.now();
     let lastStatus: MessageStatus | null = null;
@@ -118,14 +104,14 @@ export class MessageStatusChecker extends EventService {
         )}] within ${timeoutMs}ms`;
 
         const error = LoopMessageError.timeoutError(errorMessage);
-        this.emitEvent(STATUS_EVENTS.STATUS_TIMEOUT, {
+        this.emit(STATUS_EVENTS.STATUS_TIMEOUT, {
           messageId,
           targetStatuses,
           elapsed: Date.now() - startTime,
           attempts,
         });
 
-        this.emitError(error);
+        this.emit('error', error);
         throw error;
       }
 
@@ -133,7 +119,7 @@ export class MessageStatusChecker extends EventService {
 
       // Emit status change event if status changed
       if (lastStatus !== null && lastStatus !== status.status) {
-        this.emitEvent(STATUS_EVENTS.STATUS_CHANGE, {
+        this.emit(STATUS_EVENTS.STATUS_CHANGE, {
           messageId,
           oldStatus: lastStatus,
           newStatus: status.status,
@@ -144,30 +130,22 @@ export class MessageStatusChecker extends EventService {
       lastStatus = status.status as MessageStatus;
 
       if (targetStatuses.includes(status.status as MessageStatus)) {
-        this.logger.debug(`Message ${messageId} reached target status: ${status.status}`);
         return status;
       }
 
       // If the status is 'failed', no need to keep checking
       if (status.status === MESSAGE_STATUS.FAILED) {
-        this.logger.debug(`Message ${messageId} failed, stopping status checks`);
         return status;
       }
 
       attempts++;
 
       if (attempts < maxAttempts) {
-        this.logger.debug(
-          `Waiting ${delayMs}ms before next status check (attempt ${attempts}/${maxAttempts})`
-        );
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
 
     // If we've exhausted attempts, return the last status we got
-    this.logger.debug(
-      `Reached max attempts (${maxAttempts}) for message ${messageId}, getting final status`
-    );
     return this.checkStatus(messageId);
   }
 }

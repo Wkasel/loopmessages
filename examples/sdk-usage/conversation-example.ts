@@ -5,9 +5,12 @@
  * This example demonstrates using the LoopMessageConversationService
  * to manage conversations, track message delivery, and handle incoming messages.
  */
-import { LoopMessageConversationService, ConversationEvent } from '../src/LoopMessageConversation';
-import { LoopMessageError } from '../src/errors/LoopMessageError';
-import express from 'express';
+import {
+  LoopMessageConversationService,
+  CONVERSATION_EVENTS,
+  LoopMessageError,
+} from '../../src/index.js';
+import * as express from 'express';
 import {
   API_CREDENTIALS,
   SENDER_CONFIG,
@@ -16,7 +19,7 @@ import {
   LOGGER_CONFIG,
   printHeader,
   validateConfig,
-} from './config';
+} from '../config';
 
 // -----------------------------------------------------------------------------
 // SETUP EXPRESS SERVER & CONVERSATION SERVICE
@@ -64,23 +67,23 @@ const COLOR = {
 // -----------------------------------------------------------------------------
 
 // Handle events from the conversation service
-conversationService.on(ConversationEvent.MESSAGE_SENT, data => {
+conversationService.on(CONVERSATION_EVENTS.MESSAGE_SENT, data => {
   console.log(`${COLOR.cyan}[EVENT] Message sent to ${data.threadKey}${COLOR.reset}`);
 });
 
-conversationService.on(ConversationEvent.MESSAGE_DELIVERED, data => {
+conversationService.on(CONVERSATION_EVENTS.MESSAGE_DELIVERED, data => {
   console.log(
     `${COLOR.green}[EVENT] Message ${data.messageId} delivered to ${data.threadKey} (${data.deliveryTime}ms)${COLOR.reset}`
   );
 });
 
-conversationService.on(ConversationEvent.MESSAGE_FAILED, data => {
+conversationService.on(CONVERSATION_EVENTS.MESSAGE_FAILED, data => {
   console.log(
     `${COLOR.red}[EVENT] Message ${data.messageId} failed (error code: ${data.errorCode})${COLOR.reset}`
   );
 });
 
-conversationService.on(ConversationEvent.MESSAGE_RECEIVED, data => {
+conversationService.on(CONVERSATION_EVENTS.MESSAGE_RECEIVED, data => {
   console.log(
     `${COLOR.blue}[EVENT] New message received from ${data.threadKey}: "${data.message.text}"${COLOR.reset}`
   );
@@ -93,19 +96,19 @@ conversationService.on(ConversationEvent.MESSAGE_RECEIVED, data => {
   }
 });
 
-conversationService.on(ConversationEvent.REACTION_RECEIVED, data => {
+conversationService.on(CONVERSATION_EVENTS.REACTION_RECEIVED, data => {
   console.log(
     `${COLOR.magenta}[EVENT] Reaction received on message ${data.messageId}: ${data.reaction}${COLOR.reset}`
   );
 });
 
-conversationService.on(ConversationEvent.STATUS_CHANGED, data => {
+conversationService.on(CONVERSATION_EVENTS.STATUS_CHANGED, data => {
   console.log(
     `${COLOR.yellow}[EVENT] Message ${data.messageId} status changed: ${data.previous} → ${data.status}${COLOR.reset}`
   );
 });
 
-conversationService.on(ConversationEvent.ERROR, error => {
+conversationService.on(CONVERSATION_EVENTS.ERROR, error => {
   console.error(`${COLOR.red}[EVENT] Error: ${error.message}${COLOR.reset}`);
 });
 

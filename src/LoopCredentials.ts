@@ -72,6 +72,9 @@ export interface LoopSdkConfig extends LoopCredentials {
     path?: string;
   };
 
+  /** Enable conversation management service */
+  enableConversations?: boolean;
+
   /** Logging level */
   logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none';
 }

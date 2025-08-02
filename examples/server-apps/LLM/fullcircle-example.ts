@@ -1,5 +1,5 @@
 #!/usr/bin/env ts-node
-import "dotenv/config";
+import 'dotenv/config';
 /**
  * Loop Messages SDK - Full Circle OpenAI Example
  *
@@ -10,20 +10,25 @@ import "dotenv/config";
  *
  * It requires a publicly accessible webhook URL (e.g., using ngrok).
  */
-import express from 'express';
+import * as express from 'express';
 import type { Request, Response } from 'express';
-import { WebhookHandler, LoopMessageService } from '../../src/index.js';
-import type { InboundMessageWebhook, SendMessageParams, WebhookPayload } from '../../src/types.js';
+import { LoopMessageService } from '../../../src/index.js';
+import type {
+  InboundMessageWebhook,
+  SendMessageParams,
+  WebhookPayload,
+} from '../../../src/types.js';
 import OpenAI from 'openai'; // Added OpenAI import
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // --- Configuration (Replace with your actual values or use environment variables) ---
 const LOOP_AUTH_KEY = process.env.LOOP_AUTH_KEY || 'YOUR_LOOP_AUTH_KEY';
 const LOOP_SECRET_KEY = process.env.LOOP_SECRET_KEY || 'YOUR_LOOP_SECRET_KEY';
-const WEBHOOK_SECRET_KEY = process.env.WEBHOOK_SECRET_KEY || 'YOUR_WEBHOOK_SECRET_KEY';
+// Webhook secret key not used in this example as we use bearer token auth
 const SENDER_NAME = process.env.SENDER_NAME || 'your.sender@imsg.co';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY';
 const PORT = process.env.PORT || 3000;
-const EXPECTED_BEARER_TOKEN = 'omnydeveloper'; // Your configured static token
+const EXPECTED_BEARER_TOKEN = process.env.WEBHOOK_BEARER_TOKEN || 'your-bearer-token'; // Your configured static token
 
 // Basic validation
 if (
@@ -50,12 +55,7 @@ const loopService = new LoopMessageService({
   logLevel: 'info',
 });
 
-const webhooks = new WebhookHandler({
-  loopAuthKey: LOOP_AUTH_KEY, // Not strictly needed by handler, but good for consistency
-  loopSecretKey: LOOP_SECRET_KEY, // Not strictly needed by handler
-  webhookSecretKey: WEBHOOK_SECRET_KEY,
-  logLevel: 'info',
-});
+// Webhook handler not used in this example as we handle webhooks manually with bearer token auth
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY }); // Initialize OpenAI client
 
@@ -74,11 +74,7 @@ const ONBOARDING_SCRIPT_PHASES: string[] = [
 ];
 
 // --- Conversation History Store ---
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-const conversationHistories: Record<string, ChatMessage[]> = {}; // Key: userContact (e.g., phone number)
+const conversationHistories: Record<string, ChatCompletionMessageParam[]> = {}; // Key: userContact (e.g., phone number)
 
 // Add middleware to log all requests
 app.use((req, res, next) => {
@@ -104,11 +100,11 @@ app.post(
 
     let authorized = false;
     let authDebugInfo = '';
-    
+
     if (authorizationHeader) {
       // Handle both "Bearer token" and just "token" formats
       const parts = authorizationHeader.split(' ');
-      
+
       if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
         // Format: "Bearer omnydeveloper"
         authorized = parts[1] === EXPECTED_BEARER_TOKEN;
@@ -128,15 +124,17 @@ app.post(
 
     if (!authorized) {
       console.error('[Webhook] Unauthorized: Bearer token mismatch or missing.');
-      console.error(`[Webhook] Expected one of: "Bearer ${EXPECTED_BEARER_TOKEN}" or "${EXPECTED_BEARER_TOKEN}"`);
+      console.error(
+        `[Webhook] Expected one of: "Bearer ${EXPECTED_BEARER_TOKEN}" or "${EXPECTED_BEARER_TOKEN}"`
+      );
       console.error(`[Webhook] Received: "${authorizationHeader}"`);
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Unauthorized',
         debug: {
           expected: [`Bearer ${EXPECTED_BEARER_TOKEN}`, EXPECTED_BEARER_TOKEN],
           received: authorizationHeader,
-          authDebugInfo
-        }
+          authDebugInfo,
+        },
       });
     }
 
@@ -177,8 +175,14 @@ app.post(
         `[Webhook] Adapted & validated payload type: ${specificPayload.type}, from: ${specificPayload.from}`
       );
 
-      webhooks.emit(specificPayload.type, specificPayload as WebhookPayload); // Cast back for emit
-      webhooks.emit('webhook', specificPayload as WebhookPayload); // Cast back for emit
+      // Note: Since we're using bearer token auth instead of signature verification,
+      // we're handling webhooks manually rather than using WebhookHandler.parseWebhook
+
+      // Handle the webhook based on type
+      if (specificPayload.type === 'message_inbound') {
+        await handleInboundMessageWithSpeech(specificPayload as InboundMessageWithSpeech);
+      }
+      await handleWebhook(specificPayload);
 
       res.status(200).json({ typing: 3, read: true });
       console.log('[Webhook] Responded 200 OK with typing/read indicators.');
@@ -204,12 +208,12 @@ interface InboundMessageWithSpeech extends InboundMessageWebhook {
 }
 
 // Log all webhook events
-webhooks.on('webhook', (payload: WebhookPayload) => {
+async function handleWebhook(payload: WebhookPayload) {
   console.log(`[Webhook Event] Received event type: ${payload.type}`);
   console.log(`[Webhook Event] Full payload:`, JSON.stringify(payload, null, 2));
-});
+}
 
-webhooks.on('message_inbound', async (basePayload: WebhookPayload) => {
+async function handleInboundMessageWithSpeech(basePayload: WebhookPayload) {
   console.log('[message_inbound] Handler triggered!');
   const payload = basePayload as InboundMessageWithSpeech; // Use our extended type
 
@@ -234,7 +238,7 @@ webhooks.on('message_inbound', async (basePayload: WebhookPayload) => {
 
   // Defer the actual processing and reply to avoid webhook timeouts
   processMessageAndReply(userContact, messageText, payload.group_id);
-});
+}
 
 // --- Core Logic (OpenAI Interaction & Reply) ---
 async function processMessageAndReply(contact: string, text: string, groupId?: string) {
@@ -357,9 +361,9 @@ app.get('/health', (req: Request, res: Response) => {
 // Test endpoint to verify webhook URL
 app.get('/webhooks/loopmessage', (req: Request, res: Response) => {
   console.log('[Test] GET request to webhook endpoint');
-  res.status(200).json({ 
+  res.status(200).json({
     message: 'Webhook endpoint is active. Use POST to send webhooks.',
-    timestamp: new Date().toISOString() 
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -372,7 +376,7 @@ app.use((req: Request, res: Response) => {
   console.log('[404] Headers:', JSON.stringify(req.headers, null, 2));
   console.log('[404] Query params:', req.query);
   console.log('[404] Route params:', req.params);
-  
+
   // Try to get body if it exists
   let bodyInfo = 'No body parser for this route';
   if (req.body) {
@@ -383,7 +387,7 @@ app.use((req: Request, res: Response) => {
     }
   }
   console.log('[404] Body:', bodyInfo);
-  
+
   console.log('[404] Available routes:');
   console.log('  GET  /');
   console.log('  GET  /health');
@@ -391,7 +395,7 @@ app.use((req: Request, res: Response) => {
   console.log('  POST /webhooks/loopmessage');
   console.log('=================================');
   console.log('');
-  
+
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${req.url} not found`,
@@ -399,14 +403,14 @@ app.use((req: Request, res: Response) => {
       'GET /': 'Landing page',
       'GET /health': 'Health check',
       'GET /webhooks/loopmessage': 'Webhook test endpoint',
-      'POST /webhooks/loopmessage': 'Webhook receiver'
+      'POST /webhooks/loopmessage': 'Webhook receiver',
     },
     debug: {
       method: req.method,
       url: req.url,
       originalUrl: req.originalUrl,
-      headers: req.headers
-    }
+      headers: req.headers,
+    },
   });
 });
 
@@ -429,4 +433,4 @@ app.listen(PORT, () => {
   console.log('');
 });
 
-// Note: WebhookPayload was added to the import from '../../src/types' at the top.
+// Note: WebhookPayload was added to the import from '../../../src/types' at the top.

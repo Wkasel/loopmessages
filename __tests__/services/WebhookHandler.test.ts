@@ -145,8 +145,8 @@ describe('WebhookHandler', () => {
         configurable: true,
       });
 
-      // Using type assertion to access the protected method
-      const emitEvent = jest.spyOn(webhookHandler as any, 'emitEvent');
+      // Spy on the emit method instead of emitEvent
+      const emitSpy = jest.spyOn(webhookHandler, 'emit');
       const mockBody = JSON.stringify({
         type: 'message_inbound',
         timestamp: '2023-08-15T12:34:56.789Z',
@@ -156,8 +156,8 @@ describe('WebhookHandler', () => {
 
       webhookHandler.parseWebhook(mockBody, 'valid-signature');
 
-      expect(emitEvent).toHaveBeenCalledWith(WEBHOOK_EVENTS.WEBHOOK_RECEIVED, expect.any(Object));
-      expect(emitEvent).toHaveBeenCalledWith(WEBHOOK_EVENTS.WEBHOOK_VERIFIED, expect.any(Object));
+      expect(emitSpy).toHaveBeenCalledWith(WEBHOOK_EVENTS.WEBHOOK_RECEIVED, expect.any(Object));
+      expect(emitSpy).toHaveBeenCalledWith(WEBHOOK_EVENTS.WEBHOOK_VERIFIED, expect.any(Object));
 
       // Clean up
       Object.defineProperty(webhookHandler, 'verifySignature', {

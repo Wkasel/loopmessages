@@ -1,6 +1,8 @@
-# LoopMessage API Client
+# LoopMessage SDK
 
-A TypeScript client for the LoopMessage API, enabling seamless integration of iMessage and SMS messaging within your Node.js applications.
+An unofficial TypeScript SDK for the LoopMessage API, enabling seamless integration of iMessage and SMS messaging within your Node.js applications.
+
+> **Note**: This is an unofficial, community-built SDK for [LoopMessage.com](https://loopmessage.com) - the iMessage API provider that lets you send blue bubble messages programmatically.
 
 ## Features
 
@@ -18,13 +20,13 @@ A TypeScript client for the LoopMessage API, enabling seamless integration of iM
 ## Installation
 
 ```bash
-npm install loop-message
+npm install loopmessage-sdk
 ```
 
 ## Quick Start with the Unified SDK
 
 ```typescript
-import { LoopSdk, EVENTS } from 'loop-message';
+import { LoopSdk, EVENTS } from 'loopmessage-sdk';
 
 // Initialize the SDK
 const sdk = new LoopSdk({
@@ -66,7 +68,7 @@ async function sendMessage() {
 
 ```typescript
 // You can use either the unified SDK or direct service
-import { LoopMessageService } from 'loop-message';
+import { LoopMessageService } from 'loopmessage-sdk';
 
 // Initialize the service
 const loopService = new LoopMessageService({
@@ -132,7 +134,7 @@ async function sendAudioMessage() {
 ## Checking Message Status
 
 ```typescript
-import { MessageStatusChecker, STATUS_EVENTS } from 'loop-message';
+import { MessageStatusChecker, STATUS_EVENTS } from 'loopmessage-sdk';
 
 // Initialize the status checker
 const statusChecker = new MessageStatusChecker({
@@ -209,6 +211,83 @@ async function waitForCompletion(messageId: string) {
 
 ## Handling Webhooks
 
+### Using the Simple Webhook Middleware
+
+```typescript
+import express from 'express';
+import { handleLoopWebhook } from 'loop-message';
+
+const app = express();
+app.use(express.json());
+
+// Simple webhook handler
+app.post('/webhooks/loopmessage', handleLoopWebhook({
+  secretKey: 'YOUR_WEBHOOK_SECRET_KEY',
+  onMessage: async (payload) => {
+    console.log(`New message from ${payload.from}: ${payload.text}`);
+    // Return response to show typing indicator and mark as read
+    return { typing: 3, read: true };
+  },
+  onReaction: async (payload) => {
+    console.log(`${payload.from} reacted with ${payload.reaction}`);
+  },
+  onMessageSent: async (payload) => {
+    console.log(`Message ${payload.message_id} was delivered`);
+  }
+}));
+
+app.listen(3000, () => {
+  console.log('Webhook server running on port 3000');
+});
+```
+
+### Using the Advanced Webhook Middleware
+
+```typescript
+import express from 'express';
+import { createWebhookMiddleware, LoopSdk } from 'loop-message';
+
+const app = express();
+app.use(express.json());
+
+// Initialize SDK for sending replies
+const sdk = new LoopSdk({
+  loopAuthKey: 'YOUR_LOOP_AUTH_KEY',
+  loopSecretKey: 'YOUR_LOOP_SECRET_KEY',
+  senderName: 'your.sender@imsg.co'
+});
+
+// Advanced webhook middleware with full control
+app.use('/webhooks', createWebhookMiddleware({
+  webhookSecretKey: 'YOUR_WEBHOOK_SECRET_KEY',
+  path: '/loopmessage',
+  onWebhook: async (payload, req, res) => {
+    console.log(`Webhook received: ${payload.alert_type}`);
+    
+    if (payload.alert_type === 'message_inbound' && payload.text) {
+      // Send a reply
+      await sdk.sendMessage({
+        recipient: payload.from || payload.recipient,
+        text: `Echo: ${payload.text}`
+      });
+      
+      // Custom response
+      res.status(200).json({ typing: 5, read: true });
+    }
+  },
+  onError: (error, req, res) => {
+    console.error('Webhook error:', error);
+    res.status(400).json({ error: 'Invalid webhook' });
+  }
+}));
+
+app.listen(3000, () => {
+  console.log('Webhook server running on port 3000');
+});
+```
+
+### Using the Manual Webhook Handler
+
 ```typescript
 import express from 'express';
 import { WebhookHandler, WEBHOOK_EVENTS, LoopMessageService } from 'loop-message';
@@ -279,46 +358,155 @@ app.listen(3000, () => {
 });
 ```
 
-## Event-Based Architecture
+## Conversation Management
 
-LoopMessage SDK uses an event-based architecture with the `EventService` base class:
+The SDK includes a powerful conversation management service that tracks message threads, handles webhooks, and manages the complete message lifecycle:
 
 ```typescript
-import { EventService, createLogger, type LogLevel } from 'loop-message';
+import { LoopSdk } from 'loop-message';
 
-// Define your event types
-const MY_EVENTS = {
-  PROCESS_STARTED: 'process_started',
-  PROCESS_COMPLETED: 'process_completed',
-  PROCESS_FAILED: 'process_failed',
-};
+// Initialize SDK with conversation support
+const sdk = new LoopSdk({
+  loopAuthKey: 'YOUR_LOOP_AUTH_KEY',
+  loopSecretKey: 'YOUR_LOOP_SECRET_KEY',
+  senderName: 'your.sender@imsg.co',
+  enableConversations: true,
+  webhook: {
+    secretKey: 'YOUR_WEBHOOK_SECRET_KEY'
+  }
+});
 
-// Create a custom service with events
+// Get the conversation service
+const conversations = sdk.getConversationService();
+
+// Listen for conversation events
+conversations.on('messageReceived', (data) => {
+  console.log(`New message in thread ${data.threadKey}: ${data.message.text}`);
+  
+  // Auto-reply
+  conversations.sendMessage({
+    recipient: data.threadKey,
+    text: 'Thanks for your message!'
+  });
+});
+
+conversations.on('messageDelivered', (data) => {
+  console.log(`Message ${data.messageId} delivered in ${data.deliveryTime}ms`);
+});
+
+conversations.on('reactionReceived', (data) => {
+  console.log(`${data.reaction} reaction on message ${data.messageId}`);
+});
+
+// Send a message with delivery tracking
+async function sendTrackedMessage() {
+  const result = await conversations.sendMessage({
+    recipient: '+1234567890',
+    text: 'Hello! This message is being tracked.'
+  }, {
+    waitForDelivery: true,    // Wait for the message to be delivered
+    deliveryTimeoutMs: 30000  // Timeout after 30 seconds
+  });
+  
+  if (result.success) {
+    console.log(`Message delivered in ${result.deliveryTime}ms`);
+  } else {
+    console.log(`Delivery failed: ${result.errorMessage}`);
+  }
+}
+
+// Get conversation history
+const thread = conversations.getConversation('+1234567890');
+if (thread) {
+  console.log(`Thread has ${thread.messages.length} messages`);
+  console.log(`Last activity: ${thread.lastActivity}`);
+  
+  // Show recent messages
+  thread.messages.slice(-5).forEach(msg => {
+    console.log(`[${msg.direction}] ${msg.text} (${msg.status})`);
+  });
+}
+
+// Use with Express for webhooks
+import express from 'express';
+const app = express();
+app.use(express.json());
+
+// Add the webhook middleware
+app.post('/webhooks/loopmessage', sdk.getWebhookMiddleware());
+```
+
+### Conversation Features
+
+- **Thread Management**: Automatically tracks conversations by recipient or group
+- **Message History**: Maintains a complete history of sent and received messages
+- **Status Tracking**: Automatically monitors message delivery status
+- **Webhook Integration**: Built-in webhook handling with Express middleware
+- **Event System**: Rich events for all conversation activities
+- **Typing Indicators**: Show typing status to recipients
+- **Read Receipts**: Mark messages as read
+
+### Using the Standalone Conversation Service
+
+You can also use the conversation service directly:
+
+```typescript
+import { LoopMessageConversationService, ConversationEvent } from 'loop-message';
+
+const conversationService = new LoopMessageConversationService({
+  loopAuthKey: 'YOUR_LOOP_AUTH_KEY',
+  loopSecretKey: 'YOUR_LOOP_SECRET_KEY',
+  senderName: 'your.sender@imsg.co',
+  webhookAuthToken: 'YOUR_WEBHOOK_SECRET_KEY',
+  statusPollingIntervalMs: 2000,
+  statusMaxAttempts: 10
+});
+
+// Send message with automatic status tracking
+const result = await conversationService.sendMessage({
+  recipient: '+1234567890',
+  text: 'Hello from the conversation service!'
+}, {
+  trackStatus: true,
+  waitForDelivery: true
+});
+
+// Get all active conversations
+const conversations = conversationService.getConversations();
+conversations.forEach(thread => {
+  console.log(`Thread: ${thread.recipient || thread.group}`);
+  console.log(`Messages: ${thread.messages.length}`);
+  console.log(`Last activity: ${thread.lastActivity}`);
+});
+```
+
+## Event-Based Architecture
+
+LoopMessage SDK uses an event-based architecture with the `EventService` base class, which extends Node.js EventEmitter:
+
+```typescript
+import { EventService } from 'loopmessage-sdk';
+
+// Create a custom service with events  
 class MyService extends EventService {
-  constructor(logLevel: LogLevel = 'info') {
-    super(logLevel);
-    this.logger.info('MyService initialized');
+  constructor() {
+    super();
   }
   
   async processData(data: any) {
-    this.logger.debug('Processing data', { data });
-    
     try {
       // Emit start event
-      this.emitEvent(MY_EVENTS.PROCESS_STARTED, { data });
+      this.emit('process_started', { data });
       
       // Do processing...
       const result = await this.doProcessing(data);
       
       // Emit completion event
-      this.emitEvent(MY_EVENTS.PROCESS_COMPLETED, { result });
+      this.emit('process_completed', { result });
       return result;
     } catch (error) {
       // Emit error event
-      this.emitError(error);
-      
-      // Emit failure event
-      this.emitEvent(MY_EVENTS.PROCESS_FAILED, { error, data });
+      this.emit('error', error);
       throw error;
     }
   }
@@ -330,14 +518,14 @@ class MyService extends EventService {
 }
 
 // Using the service
-const myService = new MyService('debug');
+const myService = new MyService();
 
 // Listen for events
-myService.on(MY_EVENTS.PROCESS_STARTED, (data) => {
+myService.on('process_started', (data) => {
   console.log('Process started:', data);
 });
 
-myService.on(MY_EVENTS.PROCESS_COMPLETED, (data) => {
+myService.on('process_completed', (data) => {
   console.log('Process completed:', data.result);
 });
 
@@ -611,6 +799,245 @@ import type {
 } from 'loop-message';
 ```
 
+## Troubleshooting
+
+### Common Issues
+
+#### Authentication Errors
+```
+Error: Authentication failed (401)
+```
+**Solution**: Verify your `loopAuthKey` and `loopSecretKey` are correct and not expired.
+
+#### Message Not Delivered
+```
+Status: failed, Error code: 1009
+```
+**Solution**: Check that:
+- The recipient number is correctly formatted with country code (e.g., `+1234567890`)
+- Your sender name is properly configured in the Loop Message dashboard
+- The recipient has iMessage enabled (for iMessage features)
+
+#### Webhook Signature Validation Failed
+```
+Error: Invalid webhook signature
+```
+**Solution**: Ensure your `webhookSecretKey` matches the one configured in your Loop Message webhook settings.
+
+#### Rate Limiting
+```
+Error: Rate limit exceeded (429)
+```
+**Solution**: The SDK includes automatic retry with exponential backoff. For high-volume applications, implement queuing.
+
+### Debugging Tips
+
+1. **Enable debug logging** to see detailed API requests and responses:
+   ```typescript
+   const sdk = new LoopSdk({
+     // ... your config
+     logLevel: 'debug'
+   });
+   ```
+
+2. **Check message status** when delivery fails:
+   ```typescript
+   const status = await sdk.checkMessageStatus(messageId);
+   console.log('Status:', status.status);
+   console.log('Error code:', status.error_code);
+   console.log('Error message:', status.error_message);
+   ```
+
+3. **Monitor events** to track the message lifecycle:
+   ```typescript
+   sdk.on('error', (error) => {
+     console.error('SDK Error:', error);
+   });
+   ```
+
+## Rate Limiting
+
+The Loop Message API has rate limits to ensure service quality:
+
+- **Default limits**: 100 requests per minute per API key
+- **Burst capacity**: Short bursts above the limit are allowed
+- **Status endpoint**: Not rate-limited for reliability
+
+The SDK automatically handles rate limiting with:
+- Exponential backoff retry logic
+- Configurable retry attempts
+- Rate limit headers parsing
+
+Example of handling rate limits:
+```typescript
+import { retryWithExponentialBackoff } from 'loop-message';
+
+const result = await retryWithExponentialBackoff(
+  async () => sdk.sendMessage(params),
+  {
+    maxAttempts: 5,
+    initialDelayMs: 1000,
+    maxDelayMs: 30000,
+    shouldRetry: (error) => error.code === 429 || error.code >= 500
+  }
+);
+```
+
+## Webhook Security Best Practices
+
+### 1. Always Verify Signatures
+The SDK automatically verifies webhook signatures when using the `parseWebhook` method:
+```typescript
+const payload = sdk.parseWebhook(requestBody, signature);
+```
+
+### 2. Use HTTPS
+Always use HTTPS for your webhook endpoints in production.
+
+### 3. Implement Idempotency
+Store processed webhook IDs to handle potential duplicate deliveries:
+```typescript
+const processedWebhooks = new Set();
+
+sdk.on('message_inbound', async (payload) => {
+  if (processedWebhooks.has(payload.webhook_id)) {
+    console.log('Duplicate webhook, skipping');
+    return;
+  }
+  processedWebhooks.add(payload.webhook_id);
+  
+  // Process the webhook...
+});
+```
+
+### 4. Set Appropriate Timeouts
+Respond to webhooks quickly to avoid timeouts:
+```typescript
+app.post('/webhooks/loopmessage', async (req, res) => {
+  // Respond immediately
+  res.status(200).send('OK');
+  
+  // Process asynchronously
+  setImmediate(() => {
+    try {
+      const payload = sdk.parseWebhook(req.body, req.headers['loop-signature']);
+      // Handle the webhook...
+    } catch (error) {
+      console.error('Webhook processing error:', error);
+    }
+  });
+});
+```
+
+## Migration Guide
+
+### Migrating from Direct API Calls
+
+If you're currently using direct HTTP calls to the Loop Message API, here's how to migrate:
+
+#### Before (Direct API):
+```typescript
+const response = await fetch('https://server.loopmessage.com/api/v1/message/send/', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Basic ${Buffer.from(`${authKey}:${secretKey}`).toString('base64')}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    recipient: '+1234567890',
+    text: 'Hello'
+  })
+});
+```
+
+#### After (SDK):
+```typescript
+const sdk = new LoopSdk({
+  loopAuthKey: authKey,
+  loopSecretKey: secretKey,
+  senderName: 'your.sender@imsg.co'
+});
+
+const response = await sdk.sendMessage({
+  recipient: '+1234567890',
+  text: 'Hello'
+});
+```
+
+### Benefits of Migration
+- Automatic retry logic with exponential backoff
+- Built-in error handling and typed errors
+- Event emissions for monitoring
+- Simplified webhook signature verification
+- TypeScript support with full type safety
+- Consistent API across all endpoints
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/loopmessage-sdk.git
+cd loopmessage-sdk
+
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Build the project
+npm run build
+```
+
+### Publishing
+
+This project uses automated publishing via GitHub Actions:
+
+#### For Maintainers
+
+**Option 1: Manual Release (Recommended)**
+1. Go to GitHub Actions → "Release" workflow
+2. Click "Run workflow"
+3. Choose version bump type (patch/minor/major)
+4. The workflow will:
+   - Run tests and linting
+   - Bump version and update CHANGELOG.md
+   - Create a GitHub release
+   - Publish to NPM automatically
+
+**Option 2: Tag-based Release**
+```bash
+# Create and push a version tag
+npm run release:patch  # or release:minor, release:major
+git push origin main --tags
+
+# The publish workflow will trigger automatically
+```
+
+#### Required GitHub Secrets
+
+To enable automated publishing, add these secrets to your GitHub repository:
+
+- `NPM_TOKEN`: Your NPM automation token
+  1. Go to [NPM Access Tokens](https://www.npmjs.com/settings/tokens)
+  2. Generate a new "Automation" token
+  3. Add it as `NPM_TOKEN` in GitHub repository secrets
+
+#### Workflow Details
+
+- **CI**: Runs on every push/PR (tests on Node 18, 20, 22)
+- **Release**: Manual workflow for version bumps and releases  
+- **Publish**: Automatic NPM publishing when version tags are pushed
+
+## Support
+
+- **Documentation**: [https://docs.loopmessage.com/](https://docs.loopmessage.com/)
+- **API Status**: [https://status.loopmessage.com/](https://status.loopmessage.com/)
+- **Support Email**: support@loopmessage.com
+
 ## License
 
 MIT
@@ -618,4 +1045,5 @@ MIT
 ## Links
 
 - [LoopMessage API Documentation](https://docs.loopmessage.com/)
-- [GitHub Repository](https://github.com/yourusername/loop-message)
+- [GitHub Repository](https://github.com/yourusername/loopmessage-sdk)
+- [NPM Package](https://www.npmjs.com/package/loopmessage-sdk)

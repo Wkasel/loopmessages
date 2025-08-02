@@ -1,15 +1,31 @@
 {
-  "name": "loop-messages",
+  "name": "loopmessage-sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for the Loop Message API",
   "module": "dist/index.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./services/*": {
+      "types": "./dist/services/*.d.ts",
+      "import": "./dist/services/*.js"
+    },
+    "./utils/*": {
+      "types": "./dist/utils/*.d.ts",
+      "import": "./dist/utils/*.js"
+    }
+  },
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -20,20 +36,28 @@
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "format": "prettier --write 'src/**/*.ts'",
     "prepare": "npm run build",
-    "prepublishOnly": "npm test && npm run lint"
+    "prepublishOnly": "npm test && npm run lint && npm run build",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor", 
+    "release:major": "npm version major",
+    "pack:check": "npm pack --dry-run"
   },
   "keywords": [
     "imessage",
     "api",
     "messaging",
     "sms",
-    "loop"
+    "loop",
+    "loopmessage",
+    "sdk",
+    "blue bubble",
+    "unofficial"
   ],
-  "author": "Loop Message",
+  "author": "Loop Message Team",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/loop-message/loop-messages.git"
+    "url": "https://github.com/yourusername/loopmessage-sdk.git"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -47,16 +71,16 @@
     "jest": "^29.7.0",
     "prettier": "^3.1.0",
     "ts-jest": "^29.1.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@types/express": "^5.0.1",
+    "dotenv": "^16.5.0",
+    "express": "^5.0.0",
+    "openai": "^5.6.0"
   },
   "peerDependencies": {
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@types/express": "^5.0.1",
-    "axios": "^1.9.0",
-    "dotenv": "^16.5.0",
-    "express": "^5.0.0",
-    "openai": "^5.6.0"
+    "axios": "^1.9.0"
   }
 }

@@ -9,10 +9,15 @@
  * a future update. The fundamental functionality works, but proper type-safety
  * needs to be improved.
  */
-import express from 'express';
+import * as express from 'express';
 import type { Request, Response } from 'express';
-import { WebhookHandler } from '../src';
-import { LoopMessageService } from '../src';
+import {
+  WebhookHandler,
+  LoopMessageService,
+  InboundMessageWebhook,
+  SendMessageParams,
+} from '../../src/index.js';
+import type { GroupCreatedWebhook, MessageReactionWebhook } from '../../src/types.js';
 import {
   API_CREDENTIALS,
   SENDER_CONFIG,
@@ -21,9 +26,7 @@ import {
   printHeader,
   printDivider,
   validateConfig,
-} from './config';
-import { InboundMessageWebhook, GroupCreatedWebhook, MessageReactionWebhook } from '../src/types';
-import { SendMessageParams } from '../src/types';
+} from '../config';
 
 // -----------------------------------------------------------------------------
 // INITIALIZE EXPRESS SERVER & LOOPMESSAGE SERVICE
@@ -219,9 +222,8 @@ app.post('/webhooks/loopmessage', async (req: Request, res: Response) => {
   }
 
   try {
-    // The `parseWebhook` method will internally call the event listeners
-    // registered with `webhooks.on(...)`
-    const _payload = webhooks.parseWebhook(rawBody, signature);
+    // The `parseWebhook` method validates the webhook signature
+    webhooks.parseWebhook(rawBody, signature);
 
     // What should be the response?
     // The original `middleware` likely handled this.

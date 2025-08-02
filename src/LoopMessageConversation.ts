@@ -9,16 +9,10 @@ import type {
   MessageReaction,
   MessageStatusResponse,
   MessageStatus,
-  WebhookPayload,
 } from './types.js';
-
-// WebhookEventHandler and WebhookHandlerOptions need to be defined
-type WebhookEventHandler = (payload: WebhookPayload) => void | { typing?: number; read?: boolean };
-interface WebhookHandlerOptions {
-  authToken: string;
-  debug?: boolean;
-}
+import type { WebhookConfig } from './LoopCredentials.js';
 import EventEmitter from 'events';
+import type { Request, Response } from 'express';
 
 /**
  * Configuration options for the conversation service
@@ -117,19 +111,19 @@ export interface ConversationSendResult {
 /**
  * Events emitted by the conversation service
  */
-export enum ConversationEvent {
-  MESSAGE_SENT = 'messageSent',
-  MESSAGE_DELIVERED = 'messageDelivered',
-  MESSAGE_FAILED = 'messageFailed',
-  MESSAGE_RECEIVED = 'messageReceived',
-  TYPING_STARTED = 'typingStarted',
-  TYPING_STOPPED = 'typingStopped',
-  READ_RECEIPT = 'readReceipt',
-  REACTION_RECEIVED = 'reactionReceived',
-  GROUP_CREATED = 'groupCreated',
-  STATUS_CHANGED = 'statusChanged',
-  ERROR = 'error',
-}
+export const CONVERSATION_EVENTS = {
+  MESSAGE_SENT: 'message_sent',
+  MESSAGE_DELIVERED: 'message_delivered',
+  MESSAGE_FAILED: 'message_failed',
+  MESSAGE_RECEIVED: 'message_received',
+  TYPING_STARTED: 'typing_started',
+  TYPING_STOPPED: 'typing_stopped',
+  READ_RECEIPT: 'read_receipt',
+  REACTION_RECEIVED: 'reaction_received',
+  GROUP_CREATED: 'group_created',
+  STATUS_CHANGED: 'status_changed',
+  ERROR: 'error',
+};
 
 /**
  * Service for orchestrating conversations via the LoopMessage API
@@ -185,10 +179,14 @@ export class LoopMessageConversationService extends EventEmitter {
   private initializeWebhooks(config: ConversationServiceConfig): void {
     if (!config.webhookAuthToken) return;
 
-    this.webhooks = new LoopMessageWebhooks({
-      authToken: config.webhookAuthToken,
-      debug: config.debug,
-    });
+    const webhookConfig: WebhookConfig = {
+      loopAuthKey: config.loopAuthKey,
+      loopSecretKey: config.loopSecretKey,
+      webhookSecretKey: config.webhookAuthToken,
+      logLevel: config.debug ? 'debug' : 'info',
+    };
+
+    this.webhooks = new LoopMessageWebhooks(webhookConfig);
 
     // Set up webhook event handlers to update conversation state
     this.webhooks.on('message_inbound', this.handleInboundMessage.bind(this));
@@ -214,25 +212,35 @@ export class LoopMessageConversationService extends EventEmitter {
       });
     }
 
-    return this.webhooks.middleware();
-  }
+    // Return an Express middleware function
+    return (req: Request, res: Response) => {
+      try {
+        const signature = req.headers['loop-signature'] as string;
+        const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
-  /**
-   * Register a custom handler for webhook events
-   *
-   * @param event Event type to handle
-   * @param handler Handler function
-   */
-  public onWebhook(event: string, handler: WebhookEventHandler): void {
-    if (!this.webhooks) {
-      throw new LoopMessageError({
-        message: 'Webhooks not initialized. Provide webhookAuthToken in config.',
-        code: 400,
-        cause: 'Missing webhook configuration',
-      });
-    }
+        // Parse and verify the webhook
+        const payload = this.webhooks!.parseWebhook(body, signature);
 
-    this.webhooks.on(event as any, handler);
+        // Handle the webhook and emit appropriate events
+        let response: any = {};
+
+        // The webhook handler will emit events which we've already subscribed to
+        const alertType = (payload as any).alert_type;
+        if (alertType) {
+          this.webhooks!.emit(alertType, payload);
+        }
+
+        // For inbound messages, we can return typing/read indicators
+        if (alertType === 'message_inbound') {
+          response = this.handleInboundMessage(payload as any);
+        }
+
+        res.status(200).json(response);
+      } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(400).json({ error: 'Invalid webhook' });
+      }
+    };
   }
 
   /**
@@ -300,7 +308,7 @@ export class LoopMessageConversationService extends EventEmitter {
         text: response.text,
       };
     } catch (error) {
-      this.emit(ConversationEvent.ERROR, error);
+      this.emit(CONVERSATION_EVENTS.ERROR, error);
 
       if (error instanceof LoopMessageError) {
         return {
@@ -482,7 +490,7 @@ export class LoopMessageConversationService extends EventEmitter {
   public showTypingIndicator(recipientOrGroup: string, durationSeconds: number = 5): boolean {
     // NOTE: This is a placeholder. In a real implementation, this would need
     // to be coordinated with the webhook response mechanism.
-    this.emit(ConversationEvent.TYPING_STARTED, {
+    this.emit(CONVERSATION_EVENTS.TYPING_STARTED, {
       recipient: recipientOrGroup,
       duration: durationSeconds,
     });
@@ -528,7 +536,7 @@ export class LoopMessageConversationService extends EventEmitter {
     thread.messages.push(message);
     thread.lastActivity = new Date();
 
-    this.emit(ConversationEvent.MESSAGE_SENT, {
+    this.emit(CONVERSATION_EVENTS.MESSAGE_SENT, {
       threadKey,
       message,
     });
@@ -553,7 +561,7 @@ export class LoopMessageConversationService extends EventEmitter {
 
         thread.lastActivity = new Date();
 
-        this.emit(ConversationEvent.STATUS_CHANGED, {
+        this.emit(CONVERSATION_EVENTS.STATUS_CHANGED, {
           threadKey,
           messageId,
           status: status.status,
@@ -561,7 +569,7 @@ export class LoopMessageConversationService extends EventEmitter {
         });
 
         if (status.status === 'sent') {
-          this.emit(ConversationEvent.MESSAGE_DELIVERED, {
+          this.emit(CONVERSATION_EVENTS.MESSAGE_DELIVERED, {
             threadKey,
             messageId,
             deliveryTime: message.deliveredAt
@@ -569,7 +577,7 @@ export class LoopMessageConversationService extends EventEmitter {
               : undefined,
           });
         } else if (status.status === 'failed' || status.status === 'timeout') {
-          this.emit(ConversationEvent.MESSAGE_FAILED, {
+          this.emit(CONVERSATION_EVENTS.MESSAGE_FAILED, {
             threadKey,
             messageId,
             errorCode: status.error_code,
@@ -626,19 +634,19 @@ export class LoopMessageConversationService extends EventEmitter {
   /**
    * Handle inbound messages from webhooks
    */
-  private handleInboundMessage(payload: WebhookPayload): {
+  private handleInboundMessage(payload: any): {
     typing?: number;
     read?: boolean;
   } {
     // Get thread key (either recipient or group)
-    const threadKey = payload.group?.group_id || payload.recipient || '';
+    const threadKey = payload.group?.group_id || payload.recipient || payload.from || '';
     if (!threadKey) return {};
 
     // Create or get the conversation thread
     let thread = this.threads.get(threadKey);
     if (!thread) {
       thread = {
-        recipient: payload.recipient,
+        recipient: payload.from || payload.recipient,
         group: payload.group?.group_id,
         messages: [],
         lastActivity: new Date(),
@@ -648,7 +656,7 @@ export class LoopMessageConversationService extends EventEmitter {
 
     // Create a new message object
     const message: ConversationMessage = {
-      messageId: payload.message_id,
+      messageId: payload.message_id || payload.webhook_id,
       direction: 'inbound',
       text: payload.text || '',
       attachments: payload.attachments,
@@ -667,7 +675,7 @@ export class LoopMessageConversationService extends EventEmitter {
     thread.messages.push(message);
     thread.lastActivity = new Date();
 
-    this.emit(ConversationEvent.MESSAGE_RECEIVED, {
+    this.emit(CONVERSATION_EVENTS.MESSAGE_RECEIVED, {
       threadKey,
       message,
       payload,
@@ -680,13 +688,13 @@ export class LoopMessageConversationService extends EventEmitter {
   /**
    * Handle reaction webhooks
    */
-  private handleReaction(payload: WebhookPayload): {
+  private handleReaction(payload: any): {
     typing?: number;
     read?: boolean;
   } {
     if (!payload.message_id || !payload.reaction) return {};
 
-    const threadKey = payload.group?.group_id || payload.recipient || '';
+    const threadKey = payload.group?.group_id || payload.recipient || payload.from || '';
     if (!threadKey) return {};
 
     // Update the target message with the reaction
@@ -695,7 +703,7 @@ export class LoopMessageConversationService extends EventEmitter {
       originalMessage.reaction = payload.reaction as MessageReaction;
     }
 
-    this.emit(ConversationEvent.REACTION_RECEIVED, {
+    this.emit(CONVERSATION_EVENTS.REACTION_RECEIVED, {
       threadKey,
       messageId: payload.message_id,
       reaction: payload.reaction,
@@ -707,31 +715,35 @@ export class LoopMessageConversationService extends EventEmitter {
   /**
    * Handle group created webhooks
    */
-  private handleGroupCreated(payload: WebhookPayload): void {
-    if (!payload.group || !payload.group.group_id) return;
+  private handleGroupCreated(payload: any): void {
+    if (!payload.group_id) return;
 
-    const threadKey = payload.group.group_id;
+    const threadKey = payload.group_id;
     let thread = this.threads.get(threadKey);
 
     if (!thread) {
       thread = {
-        group: payload.group.group_id,
+        group: payload.group_id,
         messages: [],
         lastActivity: new Date(),
       };
       this.threads.set(threadKey, thread);
     }
 
-    this.emit(ConversationEvent.GROUP_CREATED, {
+    this.emit(CONVERSATION_EVENTS.GROUP_CREATED, {
       threadKey,
-      group: payload.group,
+      group: {
+        group_id: payload.group_id,
+        name: payload.group_name,
+        participants: payload.participants || [],
+      },
     });
   }
 
   /**
    * Handle message sent webhooks
    */
-  private handleMessageSent(payload: WebhookPayload): void {
+  private handleMessageSent(payload: any): void {
     if (!payload.message_id) return;
 
     const message = this.getMessage(payload.message_id);
@@ -742,7 +754,9 @@ export class LoopMessageConversationService extends EventEmitter {
       const threadKey = payload.group?.group_id || payload.recipient || '';
       if (threadKey) {
         this.emit(
-          payload.success ? ConversationEvent.MESSAGE_DELIVERED : ConversationEvent.MESSAGE_FAILED,
+          payload.success
+            ? CONVERSATION_EVENTS.MESSAGE_DELIVERED
+            : CONVERSATION_EVENTS.MESSAGE_FAILED,
           {
             threadKey,
             messageId: payload.message_id,
@@ -756,7 +770,7 @@ export class LoopMessageConversationService extends EventEmitter {
   /**
    * Handle message failed webhooks
    */
-  private handleMessageFailed(payload: WebhookPayload): void {
+  private handleMessageFailed(payload: any): void {
     if (!payload.message_id) return;
 
     const message = this.getMessage(payload.message_id);
@@ -766,7 +780,7 @@ export class LoopMessageConversationService extends EventEmitter {
 
       const threadKey = payload.group?.group_id || payload.recipient || '';
       if (threadKey) {
-        this.emit(ConversationEvent.MESSAGE_FAILED, {
+        this.emit(CONVERSATION_EVENTS.MESSAGE_FAILED, {
           threadKey,
           messageId: payload.message_id,
           errorCode: payload.error_code,
@@ -778,7 +792,7 @@ export class LoopMessageConversationService extends EventEmitter {
   /**
    * Handle message scheduled webhooks
    */
-  private handleMessageScheduled(payload: WebhookPayload): void {
+  private handleMessageScheduled(payload: any): void {
     if (!payload.message_id) return;
 
     const message = this.getMessage(payload.message_id);
@@ -787,7 +801,7 @@ export class LoopMessageConversationService extends EventEmitter {
 
       const threadKey = payload.group?.group_id || payload.recipient || '';
       if (threadKey) {
-        this.emit(ConversationEvent.STATUS_CHANGED, {
+        this.emit(CONVERSATION_EVENTS.STATUS_CHANGED, {
           threadKey,
           messageId: payload.message_id,
           status: 'scheduled',
@@ -800,7 +814,7 @@ export class LoopMessageConversationService extends EventEmitter {
   /**
    * Handle message timeout webhooks
    */
-  private handleMessageTimeout(payload: WebhookPayload): void {
+  private handleMessageTimeout(payload: any): void {
     if (!payload.message_id) return;
 
     const message = this.getMessage(payload.message_id);
@@ -809,7 +823,7 @@ export class LoopMessageConversationService extends EventEmitter {
 
       const threadKey = payload.group?.group_id || payload.recipient || '';
       if (threadKey) {
-        this.emit(ConversationEvent.MESSAGE_FAILED, {
+        this.emit(CONVERSATION_EVENTS.MESSAGE_FAILED, {
           threadKey,
           messageId: payload.message_id,
           errorCode: payload.error_code,

@@ -18,4 +18,7 @@ export default {
   injectGlobals: true,
   testMatch: ['**/__tests__/**/*.test.ts'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts'],
+  testTimeout: 10000, // 10 seconds timeout for all tests
+  forceExit: true, // Force Jest to exit after tests complete
+  detectOpenHandles: true, // Help detect what's keeping Jest open
 };

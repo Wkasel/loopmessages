@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version type to bump'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+        
+    - name: Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test
+      
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Build package
+      run: npm run build
+      
+    - name: Bump version
+      id: version
+      run: |
+        NEW_VERSION=$(npm version ${{ github.event.inputs.version }} --no-git-tag-version)
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "version_number=${NEW_VERSION#v}" >> $GITHUB_OUTPUT
+        
+    - name: Update changelog
+      run: |
+        echo "## ${{ steps.version.outputs.new_version }} - $(date '+%Y-%m-%d')" >> TEMP_CHANGELOG.md
+        echo "" >> TEMP_CHANGELOG.md
+        echo "- Version bump to ${{ steps.version.outputs.new_version }}" >> TEMP_CHANGELOG.md
+        echo "" >> TEMP_CHANGELOG.md
+        if [ -f CHANGELOG.md ]; then
+          cat CHANGELOG.md >> TEMP_CHANGELOG.md
+        fi
+        mv TEMP_CHANGELOG.md CHANGELOG.md
+        
+    - name: Commit changes
+      run: |
+        git add package.json package-lock.json CHANGELOG.md
+        git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}"
+        git tag ${{ steps.version.outputs.new_version }}
+        
+    - name: Push changes
+      run: |
+        git push origin main
+        git push origin ${{ steps.version.outputs.new_version }}
+        
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.new_version }}
+        release_name: Release ${{ steps.version.outputs.new_version }}
+        body: |
+          ## Changes in ${{ steps.version.outputs.new_version }}
+          
+          See [CHANGELOG.md](./CHANGELOG.md) for details.
+          
+          ## Installation
+          
+          ```bash
+          npm install loopmessage-sdk@${{ steps.version.outputs.version_number }}
+          ```
+        draft: false
+        prerelease: false
+        
+    - name: Publish to NPM
+      run: npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,20 +1,15 @@
 /**
  * LoopMessageWebhooks - Service for handling Loop Message API webhooks
  */
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import type { WebhookConfig } from '../LoopCredentials.js';
 import type { WebhookPayload } from '../types.js';
-import { EventService } from '../utils/EventService.js';
+import { EventService } from '../utils/eventService.js';
+import { EVENTS, ERROR_MESSAGES } from '../constants.js';
 
-// Webhook event names
-export const WEBHOOK_EVENTS = {
-  WEBHOOK_RECEIVED: 'webhook_received',
-  WEBHOOK_VERIFIED: 'webhook_verified',
-  WEBHOOK_INVALID: 'webhook_invalid',
-  WEBHOOK_PARSE_ERROR: 'webhook_parse_error',
-  SIGNATURE_ERROR: 'signature_error',
-};
+// Webhook event names - exported from constants
+export const WEBHOOK_EVENTS = EVENTS.WEBHOOK;
 
 /**
  * Service for handling Loop Message API webhooks
@@ -32,20 +27,16 @@ export class WebhookHandler extends EventService {
    */
   constructor(config: WebhookConfig) {
     // Initialize EventService base class
-    super(config.logLevel || 'info');
+    super();
 
     if (!config.webhookSecretKey) {
-      const error = new Error(
-        'Missing required config: webhookSecretKey is required for webhook verification'
-      );
-      this.emitError(error);
+      const error = new Error(ERROR_MESSAGES.MISSING_WEBHOOK_SECRET);
+      this.emit('error', error);
       throw error;
     }
 
     this.config = config;
     this.secretKey = config.webhookSecretKey;
-
-    this.logger.debug('WebhookHandler initialized');
   }
 
   /**
@@ -57,11 +48,7 @@ export class WebhookHandler extends EventService {
    * @throws {LoopMessageError} If verification fails or the payload is invalid
    */
   parseWebhook(body: string, signature: string): WebhookPayload {
-    this.logger.debug('Received webhook', {
-      bodyLength: body.length,
-      signatureLength: signature?.length,
-    });
-    this.emitEvent(WEBHOOK_EVENTS.WEBHOOK_RECEIVED, {
+    this.emit(WEBHOOK_EVENTS.WEBHOOK_RECEIVED, {
       bodyLength: body.length,
       signaturePresent: !!signature,
     });
@@ -69,8 +56,7 @@ export class WebhookHandler extends EventService {
     // Verify the webhook signature
     this.verifySignature(body, signature);
 
-    this.logger.debug('Webhook signature verified');
-    this.emitEvent(WEBHOOK_EVENTS.WEBHOOK_VERIFIED, { signature });
+    this.emit(WEBHOOK_EVENTS.WEBHOOK_VERIFIED, { signature });
 
     try {
       // Parse the webhook body
@@ -80,17 +66,17 @@ export class WebhookHandler extends EventService {
       if (!payload.type || !payload.timestamp) {
         const error = LoopMessageError.invalidParamError(
           'webhook',
-          'Invalid webhook payload: missing required fields'
+          ERROR_MESSAGES.WEBHOOK_MISSING_FIELDS
         );
-        this.emitEvent(WEBHOOK_EVENTS.WEBHOOK_INVALID, {
+        this.emit(WEBHOOK_EVENTS.WEBHOOK_INVALID, {
           payload,
           reason: 'missing required fields',
         });
         throw error;
       }
 
-      this.logger.info(`Webhook received: ${payload.type}`, {
-        type: payload.type,
+      // Emit specific event for the webhook type
+      this.emit(payload.type, {
         timestamp: payload.timestamp,
       });
 
@@ -106,17 +92,17 @@ export class WebhookHandler extends EventService {
       if (error instanceof SyntaxError) {
         const loopError = LoopMessageError.invalidParamError(
           'webhook',
-          'Invalid webhook payload: invalid JSON'
+          ERROR_MESSAGES.WEBHOOK_INVALID_JSON
         );
-        this.logger.error('Failed to parse webhook payload', { error });
-        this.emitEvent(WEBHOOK_EVENTS.WEBHOOK_PARSE_ERROR, { error });
+
+        this.emit(WEBHOOK_EVENTS.WEBHOOK_PARSE_ERROR, { error });
         throw loopError;
       }
 
       if (error instanceof LoopMessageError) {
-        this.emitEvent(WEBHOOK_EVENTS.WEBHOOK_INVALID, { error });
+        this.emit(WEBHOOK_EVENTS.WEBHOOK_INVALID, { error });
       } else {
-        this.emitError(error as Error);
+        this.emit('error', error as Error);
       }
 
       throw error;
@@ -134,9 +120,9 @@ export class WebhookHandler extends EventService {
     if (!signature) {
       const error = LoopMessageError.invalidParamError(
         'signature',
-        'Missing webhook signature header'
+        ERROR_MESSAGES.MISSING_SIGNATURE
       );
-      this.emitEvent(WEBHOOK_EVENTS.SIGNATURE_ERROR, {
+      this.emit(WEBHOOK_EVENTS.SIGNATURE_ERROR, {
         reason: 'missing signature',
       });
       throw error;
@@ -154,12 +140,8 @@ export class WebhookHandler extends EventService {
 
       // Compare the expected signature with the provided one
       if (signature !== expectedSignature) {
-        const error = LoopMessageError.authError('Invalid webhook signature');
-        this.logger.warn('Invalid webhook signature', {
-          expected: expectedSignature.substring(0, 10) + '...',
-          received: signature.substring(0, 10) + '...',
-        });
-        this.emitEvent(WEBHOOK_EVENTS.SIGNATURE_ERROR, {
+        const error = LoopMessageError.authError(ERROR_MESSAGES.INVALID_SIGNATURE);
+        this.emit(WEBHOOK_EVENTS.SIGNATURE_ERROR, {
           reason: 'invalid signature',
         });
         throw error;
@@ -171,10 +153,10 @@ export class WebhookHandler extends EventService {
 
       const loopError = LoopMessageError.invalidParamError(
         'signature',
-        'Failed to verify webhook signature'
+        ERROR_MESSAGES.WEBHOOK_VERIFICATION_FAILED
       );
-      this.logger.error('Failed to verify webhook signature', { error });
-      this.emitEvent(WEBHOOK_EVENTS.SIGNATURE_ERROR, {
+
+      this.emit(WEBHOOK_EVENTS.SIGNATURE_ERROR, {
         reason: 'verification error',
         error,
       });

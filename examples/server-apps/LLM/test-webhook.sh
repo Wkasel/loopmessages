@@ -13,7 +13,7 @@ curl -X POST https://6215-2605-59c0-2057-7008-19fc-ebbe-688b-c08c.ngrok-free.app
     },
     "message_id": "test-message-123",
     "message_type": "text",
-    "recipient": "+14158186348",
+    "recipient": "+1234567890",
     "sender_name": "will@a.imsg.co",
     "text": "Hello from curl test!",
     "webhook_id": "test-webhook-123",

@@ -23,6 +23,7 @@ This directory contains AI-powered chatbot examples using the Loop Messages SDK 
 ## Setup
 
 1. **Configure your credentials** in the `.env` file:
+
    ```bash
    LOOP_AUTH_KEY=your_loop_auth_key
    LOOP_SECRET_KEY=your_loop_secret_key
@@ -33,24 +34,28 @@ This directory contains AI-powered chatbot examples using the Loop Messages SDK 
    ```
 
 2. **Run the examples**:
-   
+
    For Omny (general assistant):
+
    ```bash
    ./run-example.sh
    ```
-   
+
    For Sam (credit repair coach):
+
    ```bash
    ./run-highscore.sh
    ```
 
    This script will:
+
    - Install required dependencies (ngrok, dotenv, openai)
    - Start an ngrok tunnel
    - Display the webhook URL to configure in your Loop Message account
    - Start the Express server
 
 3. **Configure the webhook** in your Loop Message account:
+
    - Copy the ngrok URL displayed by the script
    - Set it as your webhook endpoint in Loop Message settings
    - The webhook path is: `<ngrok-url>/webhook/loopmessage`

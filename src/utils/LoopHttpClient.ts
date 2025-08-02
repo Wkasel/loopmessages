@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import type { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import type { LoopCredentials } from '../LoopCredentials.js';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import { retryWithExponentialBackoff } from './retry.js';

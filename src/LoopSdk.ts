@@ -14,14 +14,16 @@ import type {
 import { LoopMessageService, MESSAGE_EVENTS } from './services/LoopMessageService.js';
 import { MessageStatusChecker, STATUS_EVENTS } from './services/LoopMessageStatus.js';
 import { WebhookHandler, WEBHOOK_EVENTS } from './services/LoopMessageWebhooks.js';
-import { EventService } from './utils/EventService.js';
-import type { LogLevel } from './utils/Logger.js';
+import { LoopMessageConversationService, CONVERSATION_EVENTS } from './LoopMessageConversation.js';
+import { EventService } from './utils/eventService.js';
+import type { LogLevel } from './utils/logger.js';
 
 // Export events from services for external use
 export const EVENTS = {
   ...MESSAGE_EVENTS,
   ...STATUS_EVENTS,
   ...WEBHOOK_EVENTS,
+  ...CONVERSATION_EVENTS,
 };
 
 /**
@@ -32,6 +34,7 @@ export class LoopSdk extends EventService {
   private readonly messageService: LoopMessageService;
   private readonly statusChecker: MessageStatusChecker;
   private readonly webhookHandler?: WebhookHandler;
+  private readonly conversationService?: LoopMessageConversationService;
 
   /**
    * Create a new LoopSdk instance
@@ -40,12 +43,10 @@ export class LoopSdk extends EventService {
    */
   constructor(config: LoopSdkConfig) {
     // Initialize the EventService base class
-    super(config.logLevel || 'info');
+    super();
 
     // Store config
     this.config = config;
-
-    this.logger.debug('Initializing LoopSdk');
 
     // Create message service
     this.messageService = new LoopMessageService({
@@ -96,22 +97,36 @@ export class LoopSdk extends EventService {
       );
     }
 
-    this.logger.info('LoopSdk initialized successfully');
+    // Create conversation service if enabled
+    if (config.enableConversations) {
+      this.conversationService = new LoopMessageConversationService({
+        loopAuthKey: config.loopAuthKey,
+        loopSecretKey: config.loopSecretKey,
+        loopAuthSecretKey: config.loopAuthSecretKey,
+        senderName: config.senderName || '',
+        webhookAuthToken: config.webhook?.secretKey,
+        baseApiUrl: config.baseApiUrl,
+        debug: config.logLevel === 'debug',
+      });
+
+      // Forward conversation events
+      this.forwardServiceEvents(
+        this.conversationService as unknown as EventService,
+        Object.values(CONVERSATION_EVENTS)
+      );
+    }
+
+    // this.logger.info('LoopSdk initialized successfully');
   }
 
   /**
    * Set the log level for all services
    *
    * @param level - New log level
+   * @deprecated Log levels are no longer supported in the simplified EventService
    */
-  setLogLevel(level: LogLevel): void {
-    super.setLogLevel(level);
-    (this.messageService as any).setLogLevel?.(level);
-    (this.statusChecker as any).setLogLevel?.(level);
-    if (this.webhookHandler) {
-      (this.webhookHandler as any).setLogLevel?.(level);
-    }
-    this.logger.info(`Log level set to: ${level}`);
+  setLogLevel(_level: LogLevel): void {
+    // Log levels are no longer supported
   }
 
   /**
@@ -129,7 +144,7 @@ export class LoopSdk extends EventService {
 
     // Always forward error events
     service.on('error', (error: Error) => {
-      this.emitError(error);
+      this.emit('error', error);
     });
   }
 
@@ -142,10 +157,6 @@ export class LoopSdk extends EventService {
   async sendMessage(
     params: Omit<SendMessageParams, 'sender_name'>
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending message', {
-      recipient: params.recipient,
-      group: params.group,
-    });
     return this.messageService.sendLoopMessage(params);
   }
 
@@ -160,10 +171,6 @@ export class LoopSdk extends EventService {
       media_url: string;
     }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending audio message', {
-      recipient: params.recipient,
-      group: params.group,
-    });
     return this.messageService.sendAudioMessage(params);
   }
 
@@ -179,7 +186,6 @@ export class LoopSdk extends EventService {
       reaction: string;
     }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending reaction', { messageId: params.message_id });
     return this.messageService.sendReaction(params);
   }
 
@@ -192,7 +198,6 @@ export class LoopSdk extends EventService {
   async sendMessageWithEffect(
     params: Omit<SendMessageParams, 'sender_name'> & { effect: string }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending message with effect', { effect: params.effect });
     return this.messageService.sendMessageWithEffect(params);
   }
 
@@ -205,7 +210,6 @@ export class LoopSdk extends EventService {
   async sendReply(
     params: Omit<SendMessageParams, 'sender_name'> & { reply_to_id: string }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending reply', { replyToId: params.reply_to_id });
     return this.messageService.sendReply(params);
   }
 
@@ -216,7 +220,6 @@ export class LoopSdk extends EventService {
    * @returns Promise resolving to auth response
    */
   async initiateAuth(passthrough?: string): Promise<LoopMessageAuthResponse> {
-    this.logger.debug('Initiating auth request');
     return this.messageService.sendLoopAuthRequest(passthrough || '');
   }
 
@@ -227,7 +230,6 @@ export class LoopSdk extends EventService {
    * @returns Promise resolving to status response
    */
   async checkMessageStatus(messageId: string): Promise<MessageStatusResponse> {
-    this.logger.debug('Checking message status', { messageId });
     return this.statusChecker.checkStatus(messageId);
   }
 
@@ -248,12 +250,7 @@ export class LoopSdk extends EventService {
       timeoutMs?: number;
     }
   ): Promise<MessageStatusResponse> {
-    const targetStatuses = Array.isArray(targetStatus) ? targetStatus : [targetStatus];
-    this.logger.debug('Waiting for message status', {
-      messageId,
-      targetStatuses,
-      options,
-    });
+    // Convert to array for type checking
     return this.statusChecker.waitForStatus(messageId, targetStatus, options);
   }
 
@@ -270,11 +267,10 @@ export class LoopSdk extends EventService {
       const error = new Error(
         'Webhook handler not configured. Please provide webhook.secretKey in the SDK config.'
       );
-      this.emitError(error);
+      this.emit('error', error);
       throw error;
     }
 
-    this.logger.debug('Parsing webhook', { bodyLength: body.length });
     return this.webhookHandler.parseWebhook(body, signature);
   }
 
@@ -300,5 +296,26 @@ export class LoopSdk extends EventService {
    */
   getWebhookHandler(): WebhookHandler | undefined {
     return this.webhookHandler;
+  }
+
+  /**
+   * Get the conversation service (if enabled)
+   *
+   * @returns The conversation service instance or undefined
+   */
+  getConversationService(): LoopMessageConversationService | undefined {
+    return this.conversationService;
+  }
+
+  /**
+   * Get the webhook middleware for Express (requires conversation service)
+   *
+   * @returns Express middleware function
+   */
+  getWebhookMiddleware() {
+    if (!this.conversationService) {
+      throw new Error('Conversation service not enabled. Set enableConversations: true in config.');
+    }
+    return this.conversationService.getWebhookMiddleware();
   }
 }

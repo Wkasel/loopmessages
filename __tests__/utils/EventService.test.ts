@@ -1,23 +1,23 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
-import { EventService } from '../../src/utils/EventService';
+import { EventService } from '../../src/utils/EventService.js';
 
 describe('EventService', () => {
   class TestEventService extends EventService {
-    // Public method to expose protected emitEvent for testing
-    public testEmitEvent(event: string, data?: unknown): void {
-      this.emitEvent(event, data);
+    // Simple test implementation
+    constructor() {
+      super();
     }
 
-    // Public method to expose protected emitError for testing
-    public testEmitError(error: Error): void {
-      this.emitError(error);
+    // Public method to test event emission
+    public testEmit(event: string, data?: unknown): void {
+      this.emit(event, data);
     }
   }
 
   let eventService: TestEventService;
 
   beforeEach(() => {
-    eventService = new TestEventService('info');
+    eventService = new TestEventService();
   });
 
   describe('event emission', () => {
@@ -33,56 +33,33 @@ describe('EventService', () => {
       expect(listener).toHaveBeenCalledWith({ data: 'test-data' });
     });
 
-    test('should emit events with emitEvent method', () => {
+    test('should emit events through public test method', () => {
       // Create a listener
       const listener = jest.fn();
       eventService.on('test-event', listener);
 
-      // Mock the logger debug method
-      const debugSpy = jest.spyOn(eventService['logger'], 'debug');
-
       // Emit the event
-      eventService.testEmitEvent('test-event', { data: 'test-data' });
+      eventService.testEmit('test-event', { data: 'test-data' });
 
       // Check that the listener was called with the right data
       expect(listener).toHaveBeenCalledWith({ data: 'test-data' });
-      // Check that the logger was called
-      expect(debugSpy).toHaveBeenCalled();
     });
   });
 
   describe('error handling', () => {
-    test('should emit error events with emitError method', () => {
+    test('should emit error events', () => {
       // Create a listener for error events
       const errorListener = jest.fn();
       eventService.on('error', errorListener);
-
-      // Mock the logger error method
-      const errorSpy = jest.spyOn(eventService['logger'], 'error');
 
       // Create an error to emit
       const testError = new Error('Test error');
 
       // Emit the error
-      eventService.testEmitError(testError);
+      eventService.emit('error', testError);
 
       // Check that the error listener was called with the right data
       expect(errorListener).toHaveBeenCalledWith(testError);
-      // Check that the logger was called
-      expect(errorSpy).toHaveBeenCalled();
-    });
-  });
-
-  describe('log level settings', () => {
-    test('should set log level', () => {
-      // Mock the logger setLevel method
-      const setLevelSpy = jest.spyOn(eventService['logger'], 'setLevel');
-
-      // Set the log level
-      eventService.setLogLevel('debug');
-
-      // Check that the logger setLevel was called with the right level
-      expect(setLevelSpy).toHaveBeenCalledWith('debug');
     });
   });
 
@@ -119,6 +96,18 @@ describe('EventService', () => {
 
       // Verify the listener was only called once
       expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('inheritance', () => {
+    test('should work as base class for other services', () => {
+      // Create a spy to monitor event emission
+      const emitSpy = jest.spyOn(eventService, 'emit');
+
+      // Test that the EventService can be extended and used
+      eventService.testEmit('custom-event', { custom: 'data' });
+
+      expect(emitSpy).toHaveBeenCalledWith('custom-event', { custom: 'data' });
     });
   });
 });

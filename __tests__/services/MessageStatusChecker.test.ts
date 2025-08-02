@@ -73,11 +73,14 @@ describe('MessageStatusChecker', () => {
     });
 
     it('should throw error for missing message ID', async () => {
-      // Use any assertion since emitError might not be directly available in the type
-      const emitErrorSpy = jest.spyOn(statusChecker as any, 'emitError');
+      // Add error listener to prevent "Unhandled error" wrapper
+      statusChecker.on('error', () => {});
+      
+      // Spy on the emit method to check for error events
+      const emitSpy = jest.spyOn(statusChecker, 'emit');
 
       await expect(statusChecker.checkStatus('')).rejects.toThrow(LoopMessageError);
-      expect(emitErrorSpy).toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalledWith('error', expect.any(LoopMessageError));
     });
 
     it('should emit error event when API call fails', async () => {
@@ -180,8 +183,10 @@ describe('MessageStatusChecker', () => {
 
       MockHttpClient.get.mockResolvedValue(mockResponse as any);
 
-      // Use any assertion since emitError might not be directly available in the type
-      const emitErrorSpy = jest.spyOn(statusChecker as any, 'emitError');
+      // Add error listener to prevent "Unhandled error" wrapper
+      statusChecker.on('error', () => {});
+      
+      // Spy on the emit method to check for error events
       const emitSpy = jest.spyOn(statusChecker, 'emit');
 
       // Set a very short timeout
@@ -192,7 +197,7 @@ describe('MessageStatusChecker', () => {
         })
       ).rejects.toThrow(LoopMessageError);
 
-      expect(emitErrorSpy).toHaveBeenCalled();
+      expect(emitSpy).toHaveBeenCalledWith('error', expect.any(LoopMessageError));
       expect(emitSpy).toHaveBeenCalledWith(
         STATUS_EVENTS.STATUS_TIMEOUT,
         expect.objectContaining({

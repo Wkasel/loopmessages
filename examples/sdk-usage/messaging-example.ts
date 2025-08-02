@@ -6,8 +6,8 @@
  * It shows basic message sending, messages with effects, group messages, audio messages,
  * and tracking message status.
  */
-import { LoopMessageService, LoopMessageError, MessageStatusChecker } from '../src';
-import type { MessageEffect } from '../src';
+import { LoopMessageService, LoopMessageError, MessageStatusChecker } from '../../src/index.js';
+import type { MessageEffect } from '../../src/index.js';
 import {
   API_CREDENTIALS,
   SENDER_CONFIG,
@@ -16,7 +16,7 @@ import {
   printHeader,
   printDivider,
   validateConfig,
-} from './config';
+} from '../config';
 
 // -----------------------------------------------------------------------------
 // EXAMPLE-SPECIFIC CONFIGURATION

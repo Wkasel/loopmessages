@@ -5,8 +5,8 @@
  * This example demonstrates the unified SDK interface with event handling.
  * The LoopSdk class provides a single entry point to all SDK functionality.
  */
-import { LoopSdk, EVENTS } from '../src';
-import type { MessageEffect, MessageReaction } from '../src';
+import { LoopSdk, EVENTS } from '../../src/index.js';
+import type { MessageEffect, MessageReaction } from '../../src/index.js';
 import {
   API_CREDENTIALS,
   SENDER_CONFIG,
@@ -14,8 +14,8 @@ import {
   LOGGER_CONFIG,
   printHeader,
   validateConfig,
-} from './config';
-import { handleError } from './utils';
+} from '../config';
+import { handleError } from '../utils';
 
 // -----------------------------------------------------------------------------
 // EXAMPLE-SPECIFIC CONFIGURATION

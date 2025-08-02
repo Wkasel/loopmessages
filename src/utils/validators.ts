@@ -1,7 +1,7 @@
 /**
  * Utility functions for validating Loop API parameters
  */
-import { LIMITS } from '../constants.js';
+import { LIMITS, VALIDATION, ERROR_MESSAGES } from '../constants.js';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import type { MessageEffect, MessageReaction } from '../types.js';
 
@@ -34,13 +34,8 @@ export function validateRecipient(recipient?: string): boolean {
 export function validatePhoneNumber(phone: string): boolean {
   // Basic validation - should start with + and contain only digits
   // Loop API has more complex validation on their server side
-  const phoneRegex = /^\+[0-9]{5,15}$/;
-
-  if (!phoneRegex.test(phone)) {
-    throw LoopMessageError.invalidParamError(
-      'recipient',
-      'Phone number must start with + and contain 5-15 digits'
-    );
+  if (!VALIDATION.PHONE_REGEX.test(phone)) {
+    throw LoopMessageError.invalidParamError('recipient', ERROR_MESSAGES.INVALID_PHONE);
   }
 
   return true;
@@ -54,10 +49,8 @@ export function validatePhoneNumber(phone: string): boolean {
  */
 export function validateEmail(email: string): boolean {
   // Simple email validation - Loop API has more complex validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (!emailRegex.test(email)) {
-    throw LoopMessageError.invalidParamError('recipient', 'Invalid email format');
+  if (!VALIDATION.EMAIL_REGEX.test(email)) {
+    throw LoopMessageError.invalidParamError('recipient', ERROR_MESSAGES.INVALID_EMAIL);
   }
 
   return true;
@@ -71,13 +64,13 @@ export function validateEmail(email: string): boolean {
  */
 export function validateMessageText(text?: string): boolean {
   if (!text || text.trim() === '') {
-    throw LoopMessageError.missingParamError('text');
+    throw LoopMessageError.missingParamError(ERROR_MESSAGES.MISSING_TEXT);
   }
 
   if (text.length > LIMITS.MAX_TEXT_LENGTH) {
     throw LoopMessageError.invalidParamError(
       'text',
-      `Text exceeds maximum length of ${LIMITS.MAX_TEXT_LENGTH} characters`
+      ERROR_MESSAGES.TEXT_TOO_LONG(LIMITS.MAX_TEXT_LENGTH)
     );
   }
 
@@ -97,7 +90,7 @@ export function validateUrl(url: string, paramName: string): boolean {
 
     // Check if URL uses HTTPS
     if (!url.startsWith('https://')) {
-      throw LoopMessageError.invalidParamError(paramName, 'URL must use HTTPS protocol');
+      throw LoopMessageError.invalidParamError(paramName, ERROR_MESSAGES.URL_NOT_HTTPS);
     }
 
     return true;
@@ -106,7 +99,7 @@ export function validateUrl(url: string, paramName: string): boolean {
       throw error;
     }
 
-    throw LoopMessageError.invalidParamError(paramName, 'Invalid URL format');
+    throw LoopMessageError.invalidParamError(paramName, ERROR_MESSAGES.INVALID_URL);
   }
 }
 
@@ -124,7 +117,7 @@ export function validateAttachments(attachments?: string[]): boolean {
   if (attachments.length > LIMITS.MAX_ATTACHMENTS) {
     throw LoopMessageError.invalidParamError(
       'attachments',
-      `Maximum of ${LIMITS.MAX_ATTACHMENTS} attachments allowed`
+      ERROR_MESSAGES.TOO_MANY_ATTACHMENTS(LIMITS.MAX_ATTACHMENTS)
     );
   }
 
@@ -148,7 +141,7 @@ export function validatePassthrough(passthrough?: string): boolean {
   if (passthrough.length > LIMITS.MAX_PASSTHROUGH_LENGTH) {
     throw LoopMessageError.invalidParamError(
       'passthrough',
-      `Passthrough exceeds maximum length of ${LIMITS.MAX_PASSTHROUGH_LENGTH} characters`
+      ERROR_MESSAGES.PASSTHROUGH_TOO_LONG(LIMITS.MAX_PASSTHROUGH_LENGTH)
     );
   }
 
@@ -166,26 +159,10 @@ export function validateMessageEffect(effect?: MessageEffect): boolean {
     return true;
   }
 
-  const validEffects = [
-    'slam',
-    'loud',
-    'gentle',
-    'invisibleInk',
-    'echo',
-    'spotlight',
-    'balloons',
-    'confetti',
-    'love',
-    'lasers',
-    'fireworks',
-    'shootingStar',
-    'celebration',
-  ];
-
-  if (!validEffects.includes(effect)) {
+  if (!VALIDATION.EFFECTS.includes(effect as any)) {
     throw LoopMessageError.invalidParamError(
       'effect',
-      `Invalid effect. Must be one of: ${validEffects.join(', ')}`
+      ERROR_MESSAGES.INVALID_EFFECT(VALIDATION.EFFECTS)
     );
   }
 
@@ -203,25 +180,10 @@ export function validateMessageReaction(reaction?: MessageReaction): boolean {
     return true;
   }
 
-  const validReactions = [
-    'love',
-    'like',
-    'dislike',
-    'laugh',
-    'exclaim',
-    'question',
-    '-love',
-    '-like',
-    '-dislike',
-    '-laugh',
-    '-exclaim',
-    '-question',
-  ];
-
-  if (!validReactions.includes(reaction)) {
+  if (!VALIDATION.REACTIONS.includes(reaction as any)) {
     throw LoopMessageError.invalidParamError(
       'reaction',
-      `Invalid reaction. Must be one of: ${validReactions.join(', ')}`
+      ERROR_MESSAGES.INVALID_REACTION(VALIDATION.REACTIONS)
     );
   }
 
@@ -239,12 +201,10 @@ export function validateService(service?: string): boolean {
     return true;
   }
 
-  const validServices = ['imessage', 'sms'];
-
-  if (!validServices.includes(service)) {
+  if (!VALIDATION.SERVICES.includes(service as any)) {
     throw LoopMessageError.invalidParamError(
       'service',
-      `Invalid service. Must be one of: ${validServices.join(', ')}`
+      ERROR_MESSAGES.INVALID_SERVICE(VALIDATION.SERVICES)
     );
   }
 

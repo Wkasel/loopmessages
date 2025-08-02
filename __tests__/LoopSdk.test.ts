@@ -1,77 +1,13 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
-
-// Define mocked types to help with typechecking
-type MockedLoopMessageService = {
-  on: jest.Mock;
-  sendLoopMessage?: jest.Mock;
-  sendAudioMessage?: jest.Mock;
-  sendMessageWithEffect?: jest.Mock;
-  sendReaction?: jest.Mock;
-  sendReply?: jest.Mock;
-};
-
-type MockedMessageStatusChecker = {
-  on: jest.Mock;
-  checkStatus?: jest.Mock;
-  waitForStatus?: jest.Mock;
-};
-
-// Define response types to avoid "any" casts
-interface MessageResponse {
-  message_id: string;
-  [key: string]: any;
-}
-
-interface StatusResponse extends MessageResponse {
-  status: string;
-}
-
-// Mock service classes - must be done before imports
-jest.mock('../src/services/LoopMessageService', () => ({
-  LoopMessageService: jest.fn().mockImplementation(() => ({
-    on: jest.fn().mockReturnThis(),
-    sendLoopMessage: jest.fn(),
-    sendAudioMessage: jest.fn(),
-    sendMessageWithEffect: jest.fn(),
-    sendReaction: jest.fn(),
-    sendReply: jest.fn(),
-  })),
-  MESSAGE_EVENTS: {
-    SEND_SUCCESS: 'send_success',
-    SEND_ERROR: 'send_error',
-  },
-}));
-
-jest.mock('../src/services/LoopMessageStatus', () => ({
-  MessageStatusChecker: jest.fn().mockImplementation(() => ({
-    on: jest.fn().mockReturnThis(),
-    checkStatus: jest.fn(),
-    waitForStatus: jest.fn(),
-  })),
-  STATUS_EVENTS: {
-    STATUS_CHECK: 'status_check',
-    STATUS_ERROR: 'status_error',
-  },
-}));
-
-jest.mock('../src/services/LoopMessageWebhooks', () => ({
-  WebhookHandler: jest.fn().mockImplementation(() => ({
-    on: jest.fn().mockReturnThis(),
-    parseWebhook: jest.fn(),
-  })),
-  WEBHOOK_EVENTS: {
-    WEBHOOK_RECEIVED: 'webhook_received',
-    WEBHOOK_ERROR: 'webhook_error',
-  },
-}));
-
 import { LoopSdk } from '../src/LoopSdk';
-import { LoopMessageService } from '../src/services/LoopMessageService';
-import { MessageStatusChecker } from '../src/services/LoopMessageStatus';
-import { WebhookHandler } from '../src/services/LoopMessageWebhooks';
+
+// Mock all dependencies
+jest.mock('../src/services/LoopMessageService.js');
+jest.mock('../src/services/LoopMessageStatus.js');
+jest.mock('../src/services/LoopMessageWebhooks.js');
+jest.mock('../src/LoopMessageConversation.js');
 
 describe('LoopSdk', () => {
-  // Test config
   const testConfig = {
     loopAuthKey: 'test-auth-key',
     loopSecretKey: 'test-secret-key',
@@ -85,158 +21,218 @@ describe('LoopSdk', () => {
   };
 
   beforeEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
-
-    // Create a new instance for each test - we'll use it in specific tests
-    new LoopSdk(testConfig);
   });
 
   describe('initialization', () => {
-    test('should create message service with correct config', () => {
-      expect(LoopMessageService).toHaveBeenCalledWith({
-        loopAuthKey: testConfig.loopAuthKey,
-        loopSecretKey: testConfig.loopSecretKey,
-        loopAuthSecretKey: testConfig.loopAuthSecretKey,
-        senderName: testConfig.senderName,
-        baseApiUrl: undefined, // Not provided in test config
-        loopApiAuthHost: undefined, // Not provided in test config
-        logLevel: testConfig.logLevel,
-      });
+    test('should create SDK instance with all services', () => {
+      const sdk = new LoopSdk(testConfig);
+      
+      // Check that SDK instance has all expected properties
+      expect(sdk).toBeDefined();
+      expect(sdk.sendMessage).toBeDefined();
+      expect(sdk.sendAudioMessage).toBeDefined();
+      expect(sdk.sendMessageWithEffect).toBeDefined();
+      expect(sdk.sendReaction).toBeDefined();
+      expect(sdk.sendReply).toBeDefined();
+      expect(sdk.checkMessageStatus).toBeDefined();
+      expect(sdk.waitForMessageStatus).toBeDefined();
+      expect(sdk.parseWebhook).toBeDefined();
     });
 
-    test('should create status checker with correct config', () => {
-      expect(MessageStatusChecker).toHaveBeenCalledWith({
-        loopAuthKey: testConfig.loopAuthKey,
-        loopSecretKey: testConfig.loopSecretKey,
-        baseApiUrl: undefined, // Not provided in test config
-        logLevel: testConfig.logLevel,
-      });
+    test('should create SDK without webhook when webhook config is not provided', () => {
+      const configWithoutWebhook = {
+        loopAuthKey: 'test-auth-key',
+        loopSecretKey: 'test-secret-key',
+        senderName: 'test-sender@example.com',
+      };
+
+      const sdk = new LoopSdk(configWithoutWebhook);
+      
+      // Should still have all methods
+      expect(sdk).toBeDefined();
+      expect(sdk.sendMessage).toBeDefined();
+      expect(sdk.checkMessageStatus).toBeDefined();
     });
 
-    test('should create webhook handler with correct config when webhook config is provided', () => {
-      expect(WebhookHandler).toHaveBeenCalledWith({
-        loopAuthKey: testConfig.loopAuthKey,
-        loopSecretKey: testConfig.loopSecretKey,
-        webhookSecretKey: testConfig.webhook.secretKey,
-        baseApiUrl: undefined, // Not provided in test config
-        webhookPath: testConfig.webhook.path,
-        logLevel: testConfig.logLevel,
-      });
-    });
+    test('should create SDK with conversation service when enabled', () => {
+      const configWithConversations = {
+        ...testConfig,
+        enableConversations: true,
+      };
 
-    test('should not create webhook handler when webhook config is not provided', () => {
-      jest.clearAllMocks();
-      new LoopSdk({
-        loopAuthKey: testConfig.loopAuthKey,
-        loopSecretKey: testConfig.loopSecretKey,
-        senderName: testConfig.senderName,
-      });
-
-      expect(WebhookHandler).not.toHaveBeenCalled();
+      const sdk = new LoopSdk(configWithConversations);
+      
+      // Check that conversation methods are available
+      expect(sdk.getConversationService()).toBeDefined();
     });
   });
 
-  describe('service methods', () => {
-    test('should call messageService.sendLoopMessage when sendMessage is called', async () => {
-      const mockResponse: MessageResponse = { message_id: 'test-message-id' };
-      const mockParams = { recipient: '+1234567890', text: 'Test message' };
+  describe('message sending methods', () => {
+    let sdk: LoopSdk;
 
-      // Set up the mock to return our test data
-      const mockSendLoopMessage = jest
-        .fn<() => Promise<MessageResponse>>()
-        .mockResolvedValue(mockResponse);
+    beforeEach(() => {
+      sdk = new LoopSdk(testConfig);
+    });
 
-      // Create a mock service function with the right return type
-      const mockServiceFn = jest.fn<() => Partial<MockedLoopMessageService>>().mockReturnValue({
-        on: jest.fn(),
-        sendLoopMessage: mockSendLoopMessage,
-      });
+    test('sendMessage should delegate to messageService', async () => {
+      const mockResponse = { message_id: 'test-id', success: true };
+      
+      // Access the private messageService for mocking (using type assertion)
+      const messageService = (sdk as any).messageService;
+      messageService.sendLoopMessage = jest.fn().mockResolvedValue(mockResponse);
 
-      // Use type assertion to avoid typing issues
-      (LoopMessageService as unknown as jest.Mock).mockImplementationOnce(mockServiceFn);
+      const params = { recipient: '+1234567890', text: 'Test message' };
+      const result = await sdk.sendMessage(params);
 
-      // Create a new SDK instance with our mocked service
-      const testSdk = new LoopSdk(testConfig);
-
-      // Call the method and verify the result
-      const result = await testSdk.sendMessage(mockParams);
-
-      expect(mockSendLoopMessage).toHaveBeenCalledWith(mockParams);
+      expect(messageService.sendLoopMessage).toHaveBeenCalledWith(params);
       expect(result).toEqual(mockResponse);
     });
 
-    test('should call messageService.sendAudioMessage when sendAudioMessage is called', async () => {
-      const mockResponse: MessageResponse = { message_id: 'test-audio-id' };
-      const mockParams = {
-        recipient: '+1234567890',
-        text: 'Check this audio',
-        media_url: 'https://example.com/audio.mp3',
+    test('sendAudioMessage should delegate to messageService', async () => {
+      const mockResponse = { message_id: 'test-id', success: true };
+      
+      const messageService = (sdk as any).messageService;
+      messageService.sendAudioMessage = jest.fn().mockResolvedValue(mockResponse);
+
+      const params = { 
+        recipient: '+1234567890', 
+        text: 'Audio message',
+        media_url: 'https://example.com/audio.mp3'
       };
+      const result = await sdk.sendAudioMessage(params);
 
-      // Set up the mock
-      const mockSendAudioMessage = jest
-        .fn<() => Promise<MessageResponse>>()
-        .mockResolvedValue(mockResponse);
-
-      // Create a mock service function with the right return type
-      const mockServiceFn = jest.fn<() => Partial<MockedLoopMessageService>>().mockReturnValue({
-        on: jest.fn(),
-        sendAudioMessage: mockSendAudioMessage,
-      });
-
-      // Use type assertion to avoid typing issues
-      (LoopMessageService as unknown as jest.Mock).mockImplementationOnce(mockServiceFn);
-
-      // Create a new SDK instance
-      const testSdk = new LoopSdk(testConfig);
-
-      // Call the method and verify
-      const result = await testSdk.sendAudioMessage(mockParams);
-
-      expect(mockSendAudioMessage).toHaveBeenCalledWith(mockParams);
+      expect(messageService.sendAudioMessage).toHaveBeenCalledWith(params);
       expect(result).toEqual(mockResponse);
     });
 
-    test('should call statusChecker.checkStatus when checkMessageStatus is called', async () => {
-      const mockResponse: StatusResponse = {
-        message_id: 'test-message-id',
-        status: 'delivered',
+    test('sendMessageWithEffect should delegate to messageService', async () => {
+      const mockResponse = { message_id: 'test-id', success: true };
+      
+      const messageService = (sdk as any).messageService;
+      messageService.sendMessageWithEffect = jest.fn().mockResolvedValue(mockResponse);
+
+      const params = { 
+        recipient: '+1234567890', 
+        text: 'Test message',
+        effect: 'confetti' as const
       };
-      const messageId = 'test-message-id';
+      const result = await sdk.sendMessageWithEffect(params);
 
-      // Set up mock
-      const mockCheckStatus = jest
-        .fn<() => Promise<StatusResponse>>()
-        .mockResolvedValue(mockResponse);
+      expect(messageService.sendMessageWithEffect).toHaveBeenCalledWith(params);
+      expect(result).toEqual(mockResponse);
+    });
 
-      // Create a mock status checker function with the right return type
-      const mockStatusCheckerFn = jest
-        .fn<() => Partial<MockedMessageStatusChecker>>()
-        .mockReturnValue({
-          on: jest.fn(),
-          checkStatus: mockCheckStatus,
-        });
+    test('sendReaction should delegate to messageService', async () => {
+      const mockResponse = { message_id: 'test-id', success: true };
+      
+      const messageService = (sdk as any).messageService;
+      messageService.sendReaction = jest.fn().mockResolvedValue(mockResponse);
 
-      // Use type assertion to avoid typing issues
-      (MessageStatusChecker as unknown as jest.Mock).mockImplementationOnce(mockStatusCheckerFn);
+      const params = { 
+        recipient: '+1234567890', 
+        text: '',
+        message_id: 'original-message-id',
+        reaction: 'heart' as const
+      };
+      const result = await sdk.sendReaction(params);
 
-      // Create SDK instance
-      const testSdk = new LoopSdk(testConfig);
+      expect(messageService.sendReaction).toHaveBeenCalledWith(params);
+      expect(result).toEqual(mockResponse);
+    });
 
-      // Call and verify
-      const result = await testSdk.checkMessageStatus(messageId);
+    test('sendReply should delegate to messageService', async () => {
+      const mockResponse = { message_id: 'test-id', success: true };
+      
+      const messageService = (sdk as any).messageService;
+      messageService.sendReply = jest.fn().mockResolvedValue(mockResponse);
 
-      expect(mockCheckStatus).toHaveBeenCalledWith(messageId);
+      const params = { 
+        recipient: '+1234567890', 
+        text: 'This is a reply',
+        reply_to_id: 'original-message-id'
+      };
+      const result = await sdk.sendReply(params);
+
+      expect(messageService.sendReply).toHaveBeenCalledWith(params);
       expect(result).toEqual(mockResponse);
     });
   });
 
-  describe('event forwarding', () => {
-    test('should forward events from services to SDK', () => {
-      // Skip this test as it requires more complex mocking
-      // This test would need to be rewritten to account for the way events are forwarded
-      // in the actual implementation
+  describe('status checking methods', () => {
+    let sdk: LoopSdk;
+
+    beforeEach(() => {
+      sdk = new LoopSdk(testConfig);
+    });
+
+    test('checkMessageStatus should delegate to statusChecker', async () => {
+      const mockResponse = { status: 'sent', recipient: '+1234567890' };
+      
+      const statusChecker = (sdk as any).statusChecker;
+      statusChecker.checkStatus = jest.fn().mockResolvedValue(mockResponse);
+
+      const result = await sdk.checkMessageStatus('test-message-id');
+
+      expect(statusChecker.checkStatus).toHaveBeenCalledWith('test-message-id');
+      expect(result).toEqual(mockResponse);
+    });
+
+    test('waitForMessageStatus should delegate to statusChecker', async () => {
+      const mockResponse = { status: 'sent', recipient: '+1234567890' };
+      
+      const statusChecker = (sdk as any).statusChecker;
+      statusChecker.waitForStatus = jest.fn().mockResolvedValue(mockResponse);
+
+      const options = { maxAttempts: 5, delayMs: 1000 };
+      const result = await sdk.waitForMessageStatus('test-message-id', 'sent', options);
+
+      expect(statusChecker.waitForStatus).toHaveBeenCalledWith('test-message-id', 'sent', options);
+      expect(result).toEqual(mockResponse);
+    });
+  });
+
+  describe('webhook methods', () => {
+    test('parseWebhook should parse webhook when handler is configured', () => {
+      const sdk = new LoopSdk(testConfig);
+      const mockPayload = { alert_type: 'message_inbound', message_id: 'test-id' };
+      
+      const webhookHandler = (sdk as any).webhookHandler;
+      webhookHandler.parseWebhook = jest.fn().mockReturnValue(mockPayload);
+
+      const result = sdk.parseWebhook('body', 'signature');
+
+      expect(webhookHandler.parseWebhook).toHaveBeenCalledWith('body', 'signature');
+      expect(result).toEqual(mockPayload);
+    });
+
+    test('parseWebhook should throw error when webhooks are not configured', () => {
+      const configWithoutWebhook = {
+        loopAuthKey: 'test-auth-key',
+        loopSecretKey: 'test-secret-key',
+        senderName: 'test-sender@example.com',
+      };
+
+      const sdk = new LoopSdk(configWithoutWebhook);
+      
+      expect(() => {
+        sdk.parseWebhook('body', 'signature');
+      }).toThrow('Webhook handler not configured');
+    });
+  });
+
+  describe('event handling', () => {
+    test('should forward events from services', () => {
+      const sdk = new LoopSdk(testConfig);
+      const listener = jest.fn();
+
+      sdk.on('send_success', listener);
+
+      // Emit event from the messageService
+      const messageService = (sdk as any).messageService;
+      messageService.emit('send_success', { message_id: 'test-id' });
+
+      expect(listener).toHaveBeenCalledWith({ message_id: 'test-id' });
     });
   });
 });

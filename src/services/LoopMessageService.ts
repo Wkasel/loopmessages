@@ -1,7 +1,7 @@
 /**
  * LoopMessageService - Service for sending messages via the Loop Message API
  */
-import { API, LIMITS } from '../constants.js';
+import { API, LIMITS, EVENTS, ERROR_MESSAGES } from '../constants.js';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import type { MessageServiceConfig } from '../LoopCredentials.js';
 import type {
@@ -11,20 +11,12 @@ import type {
   MessageReaction,
   SendMessageParams,
 } from '../types.js';
-import { LoopHttpClient } from '../utils/LoopHttpClient.js';
-import { EventService } from '../utils/EventService.js';
+import { LoopHttpClient } from '../utils/loopHttpClient.js';
+import { EventService } from '../utils/eventService.js';
 import * as validators from '../utils/validators.js';
 
-// Message event names
-export const MESSAGE_EVENTS = {
-  SEND_START: 'send_start',
-  SEND_SUCCESS: 'send_success',
-  SEND_ERROR: 'send_error',
-  AUTH_START: 'auth_start',
-  AUTH_SUCCESS: 'auth_success',
-  AUTH_ERROR: 'auth_error',
-  PARAM_VALIDATION_FAIL: 'param_validation_fail',
-};
+// Message event names - exported from constants
+export const MESSAGE_EVENTS = EVENTS.MESSAGE;
 
 /**
  * Service for sending messages via the Loop Message API
@@ -42,13 +34,11 @@ export class LoopMessageService extends EventService {
    */
   constructor(config: MessageServiceConfig) {
     // Initialize EventService base class
-    super(config.logLevel || 'info');
+    super();
 
     if (!config.loopAuthKey || !config.loopSecretKey || !config.senderName) {
-      const error = new Error(
-        'Missing required config: loopAuthKey, loopSecretKey, and senderName are required.'
-      );
-      this.emitError(error);
+      const error = new Error(ERROR_MESSAGES.MISSING_CONFIG);
+      this.emit('error', error);
       throw error;
     }
 
@@ -63,8 +53,6 @@ export class LoopMessageService extends EventService {
       },
       'auth'
     );
-
-    this.logger.debug('LoopMessageService initialized');
   }
 
   /**
@@ -83,7 +71,7 @@ export class LoopMessageService extends EventService {
       if (params.recipient && params.group) {
         throw LoopMessageError.invalidParamError(
           'recipient and group',
-          'Provide either recipient or group, not both'
+          ERROR_MESSAGES.MUTUAL_EXCLUSIVE
         );
       }
 
@@ -102,19 +90,19 @@ export class LoopMessageService extends EventService {
 
       // Validate audio message
       if (params.audio_message && !params.media_url) {
-        throw LoopMessageError.missingParamError('media_url for audio message');
+        throw LoopMessageError.missingParamError(ERROR_MESSAGES.AUDIO_NEEDS_URL);
       }
 
       // Validate reaction
       if (params.reaction && !params.message_id) {
-        throw LoopMessageError.missingParamError('message_id for reaction');
+        throw LoopMessageError.missingParamError(ERROR_MESSAGES.REACTION_NEEDS_ID);
       }
 
       // Cannot use both effect and reaction
       if (params.effect && params.reaction) {
         throw LoopMessageError.invalidParamError(
           'effect and reaction',
-          'Cannot use both effect and reaction in the same request'
+          ERROR_MESSAGES.EFFECT_AND_REACTION
         );
       }
 
@@ -131,21 +119,15 @@ export class LoopMessageService extends EventService {
       // SMS limitations
       if (params.service === 'sms') {
         if (params.subject || params.effect || params.reply_to_id) {
-          throw LoopMessageError.invalidParamError(
-            'service',
-            'SMS does not support subject, effect, or reply_to_id parameters'
-          );
+          throw LoopMessageError.invalidParamError('service', ERROR_MESSAGES.SMS_NO_FEATURES);
         }
 
         if (params.recipient && params.recipient.includes('@')) {
-          throw LoopMessageError.invalidParamError(
-            'recipient',
-            'Cannot send SMS to an email address'
-          );
+          throw LoopMessageError.invalidParamError('recipient', ERROR_MESSAGES.SMS_NO_EMAIL);
         }
 
         if (params.group) {
-          throw LoopMessageError.invalidParamError('group', 'Cannot send SMS to a group');
+          throw LoopMessageError.invalidParamError('group', ERROR_MESSAGES.SMS_NO_GROUP);
         }
       }
 
@@ -153,7 +135,7 @@ export class LoopMessageService extends EventService {
       if (params.timeout !== undefined && params.timeout < LIMITS.MIN_TIMEOUT) {
         throw LoopMessageError.invalidParamError(
           'timeout',
-          `Timeout must be at least ${LIMITS.MIN_TIMEOUT} seconds`
+          ERROR_MESSAGES.MIN_TIMEOUT(LIMITS.MIN_TIMEOUT)
         );
       }
 
@@ -168,7 +150,7 @@ export class LoopMessageService extends EventService {
       }
     } catch (error) {
       if (error instanceof LoopMessageError) {
-        this.emitEvent(MESSAGE_EVENTS.PARAM_VALIDATION_FAIL, {
+        this.emit(MESSAGE_EVENTS.PARAM_VALIDATION_FAIL, {
           error,
           params: {
             ...params,
@@ -205,8 +187,7 @@ export class LoopMessageService extends EventService {
       text: params.text?.length > 100 ? `${params.text.substring(0, 100)}...` : params.text,
     };
 
-    this.logger.debug('Sending message', logSafeParams);
-    this.emitEvent(MESSAGE_EVENTS.SEND_START, { params: logSafeParams });
+    this.emit(MESSAGE_EVENTS.SEND_START, { params: logSafeParams });
 
     try {
       // Make the API request
@@ -215,16 +196,11 @@ export class LoopMessageService extends EventService {
         fullParams
       );
 
-      this.logger.debug('Message sent successfully', {
-        messageId: response.message_id,
-        success: response.success,
-      });
-      this.emitEvent(MESSAGE_EVENTS.SEND_SUCCESS, { response });
+      this.emit(MESSAGE_EVENTS.SEND_SUCCESS, { response });
 
       return response;
     } catch (error) {
-      this.logger.error('Error sending message', error);
-      this.emitEvent(MESSAGE_EVENTS.SEND_ERROR, {
+      this.emit(MESSAGE_EVENTS.SEND_ERROR, {
         error,
         params: logSafeParams,
       });
@@ -246,12 +222,6 @@ export class LoopMessageService extends EventService {
       media_url: string;
     }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending audio message', {
-      recipient: params.recipient,
-      group: params.group,
-      mediaUrl: params.media_url,
-    });
-
     return this.sendLoopMessage({
       ...params,
       audio_message: true,
@@ -271,11 +241,6 @@ export class LoopMessageService extends EventService {
       reaction: MessageReaction;
     }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending reaction', {
-      messageId: params.message_id,
-      reaction: params.reaction,
-    });
-
     return this.sendLoopMessage(params);
   }
 
@@ -291,12 +256,6 @@ export class LoopMessageService extends EventService {
       effect: MessageEffect;
     }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending message with effect', {
-      recipient: params.recipient,
-      group: params.group,
-      effect: params.effect,
-    });
-
     return this.sendLoopMessage(params);
   }
 
@@ -312,12 +271,6 @@ export class LoopMessageService extends EventService {
       reply_to_id: string;
     }
   ): Promise<LoopMessageSendResponse> {
-    this.logger.debug('Sending reply', {
-      replyToId: params.reply_to_id,
-      recipient: params.recipient,
-      group: params.group,
-    });
-
     return this.sendLoopMessage(params);
   }
 
@@ -335,24 +288,18 @@ export class LoopMessageService extends EventService {
         validators.validatePassthrough(passthrough);
       }
 
-      this.logger.debug('Initiating auth request');
-      this.emitEvent(MESSAGE_EVENTS.AUTH_START, { passthrough });
+      this.emit(MESSAGE_EVENTS.AUTH_START, { passthrough });
 
       // Make the API request
       const response = await this.authClient.post<LoopMessageAuthResponse>(API.ENDPOINTS.AUTH, {
         passthrough,
       });
 
-      this.logger.debug('Auth request successful', {
-        requestId: response.request_id,
-        success: response.success,
-      });
-      this.emitEvent(MESSAGE_EVENTS.AUTH_SUCCESS, { response });
+      this.emit(MESSAGE_EVENTS.AUTH_SUCCESS, { response });
 
       return response;
     } catch (error) {
-      this.logger.error('Error initiating auth request', error);
-      this.emitEvent(MESSAGE_EVENTS.AUTH_ERROR, { error, passthrough });
+      this.emit(MESSAGE_EVENTS.AUTH_ERROR, { error, passthrough });
 
       // The HTTP client already handles and transforms errors
       throw error;
