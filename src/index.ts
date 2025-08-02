@@ -49,5 +49,23 @@ export { LoopMessageError } from './errors/LoopMessageError.js';
 export { createWebhookMiddleware, handleLoopWebhook } from './utils/webhookMiddleware.js';
 export type { WebhookMiddlewareOptions, SimpleWebhookHandlers } from './utils/webhookMiddleware.js';
 
-// Constants
-export { MESSAGE_STATUS, MESSAGE_EFFECT, MESSAGE_REACTION } from './constants.js';
+// Validation utilities for developers
+export {
+  isPhoneNumber,
+  isEmail,
+  formatPhoneNumber,
+  getCountryCode,
+  validatePhoneNumber,
+  validateEmail,
+  validateRecipient,
+} from './utils/validators.js';
+
+// Constants for IDE auto-completion and validation
+export {
+  MESSAGE_STATUS,
+  MESSAGE_EFFECT,
+  MESSAGE_REACTION,
+  WEBHOOK_TYPES,
+  SERVICES,
+  VALIDATION,
+} from './constants.js';

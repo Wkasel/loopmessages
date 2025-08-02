@@ -2,91 +2,202 @@
  * Centralized type definitions for the Loop Message SDK
  */
 
+import { MESSAGE_EFFECT, MESSAGE_REACTION, MESSAGE_STATUS } from './constants.js';
+
 // -----------------------------------------------------------------------------
 // Message Types
 // -----------------------------------------------------------------------------
 
 /**
- * Visual effects for iMessage
+ * Visual effects for iMessage messages
+ *
+ * @example
+ * ```typescript
+ * // These values will auto-complete in your IDE:
+ * await sdk.sendMessageWithEffect({
+ *   recipient: '+1234567890',
+ *   text: 'Party time!',
+ *   effect: 'confetti' // <-- IDE will suggest all available effects
+ * });
+ * ```
  */
-export type MessageEffect =
-  | 'slam'
-  | 'loud'
-  | 'gentle'
-  | 'invisibleInk'
-  | 'echo'
-  | 'spotlight'
-  | 'balloons'
-  | 'confetti'
-  | 'love'
-  | 'lasers'
-  | 'fireworks'
-  | 'shootingStar'
-  | 'celebration';
+export type MessageEffect = (typeof MESSAGE_EFFECT)[keyof typeof MESSAGE_EFFECT];
 
 /**
- * Reaction types for iMessage
- * Prefixed with '-' to remove a reaction
+ * Reaction types for iMessage tapbacks
+ * Use negative values (prefixed with '-') to remove reactions
+ *
+ * @example
+ * ```typescript
+ * // Add a love reaction
+ * await sdk.sendReaction({
+ *   recipient: '+1234567890',
+ *   text: '',
+ *   message_id: 'msg-123',
+ *   reaction: 'love' // <-- IDE will auto-complete available reactions
+ * });
+ *
+ * // Remove a love reaction
+ * await sdk.sendReaction({
+ *   recipient: '+1234567890',
+ *   text: '',
+ *   message_id: 'msg-123',
+ *   reaction: '-love' // <-- Remove the reaction
+ * });
+ * ```
  */
-export type MessageReaction =
-  | 'love'
-  | 'like'
-  | 'dislike'
-  | 'laugh'
-  | 'exclaim'
-  | 'question'
-  | '-love'
-  | '-like'
-  | '-dislike'
-  | '-laugh'
-  | '-exclaim'
-  | '-question';
+export type MessageReaction = (typeof MESSAGE_REACTION)[keyof typeof MESSAGE_REACTION];
 
 /**
- * Status values for messages
+ * Message delivery status values
+ *
+ * @example
+ * ```typescript
+ * const status = await sdk.checkMessageStatus('msg-123');
+ * if (status.status === 'sent') { // <-- IDE knows all possible status values
+ *   console.log('Message delivered!');
+ * }
+ * ```
  */
-export type MessageStatus =
-  | 'processing' // Send request was successfully accepted and is being processed
-  | 'scheduled' // Send request successfully processed and scheduled for sending
-  | 'failed' // Failed to send or deliver a message
-  | 'sent' // Message was successfully delivered to a recipient
-  | 'timeout' // The minimum time required to send a message is timed out
-  | 'unknown'; // Message status is currently unknown
+export type MessageStatus = (typeof MESSAGE_STATUS)[keyof typeof MESSAGE_STATUS];
 
 /**
- * Parameters for sending a message
+ * Parameters for sending a message via LoopMessage API
+ *
+ * @example
+ * ```typescript
+ * // Basic text message
+ * await sdk.sendMessage({
+ *   recipient: '+1234567890',
+ *   text: 'Hello from LoopMessage!'
+ * });
+ *
+ * // Message with effect and attachments
+ * await sdk.sendMessage({
+ *   recipient: '+1234567890',
+ *   text: 'Check out this image!',
+ *   effect: 'confetti', // <-- Auto-completes available effects
+ *   attachments: ['https://example.com/image.jpg']
+ * });
+ *
+ * // Reaction to a message
+ * await sdk.sendMessage({
+ *   recipient: '+1234567890',
+ *   text: '',
+ *   message_id: 'msg-to-react-to',
+ *   reaction: 'love' // <-- Auto-completes available reactions
+ * });
+ * ```
  */
 export interface SendMessageParams {
   // Core message routing parameters (one of these is required)
-  recipient?: string; // Phone number or email for individual message
-  group?: string; // Group ID for group message
+  /**
+   * Phone number (with country code) or email for individual message
+   * @example '+1234567890' or 'user@example.com'
+   */
+  recipient?: string;
+
+  /**
+   * Group ID for group message (mutually exclusive with recipient)
+   * @example 'group-uuid-123'
+   */
+  group?: string;
 
   // Required message content
-  text: string; // Message text (required, max 10000 chars)
-  sender_name: string; // Your dedicated sender name (required)
+  /**
+   * Message text content (required, max 10,000 characters)
+   * @example 'Hello, how are you?'
+   */
+  text: string;
+
+  /**
+   * Your dedicated sender name from LoopMessage dashboard
+   * @example 'your.sender@imsg.co'
+   */
+  sender_name: string;
 
   // Message content enhancements
-  attachments?: string[]; // Array of public HTTPS image URLs (max 3)
-  subject?: string; // Displays as bold title before message text
-  effect?: MessageEffect; // Visual effect for message delivery
+  /**
+   * Array of public HTTPS image URLs (max 3 attachments)
+   * @example ['https://example.com/image1.jpg', 'https://example.com/image2.png']
+   */
+  attachments?: string[];
+
+  /**
+   * Subject line - displays as bold title before message text
+   * @example 'Important Update'
+   */
+  subject?: string;
+
+  /**
+   * Visual effect for message delivery (iMessage only)
+   * @example 'confetti' | 'fireworks' | 'balloons'
+   */
+  effect?: MessageEffect;
 
   // Audio message parameters
-  media_url?: string; // URL to audio file (for voice messages)
-  audio_message?: boolean; // Flag to send as voice message
+  /**
+   * URL to audio file for voice messages
+   * @example 'https://example.com/audio.mp3'
+   */
+  media_url?: string;
+
+  /**
+   * Flag to send as voice message (requires media_url)
+   */
+  audio_message?: boolean;
 
   // Reply and reaction parameters
-  reply_to_id?: string; // Message ID to reply to
-  message_id?: string; // Required for reactions - message to react to
-  reaction?: MessageReaction; // Type of reaction to send (requires message_id)
+  /**
+   * Message ID to reply to (creates threaded reply)
+   * @example 'msg-uuid-123'
+   */
+  reply_to_id?: string;
+
+  /**
+   * Message ID to react to (required for reactions)
+   * @example 'msg-uuid-456'
+   */
+  message_id?: string;
+
+  /**
+   * Type of reaction to send (requires message_id)
+   * Use negative values to remove reactions
+   * @example 'love' | 'like' | '-love'
+   */
+  reaction?: MessageReaction;
 
   // Message delivery parameters
-  timeout?: number; // In seconds, min 5
-  service?: 'imessage' | 'sms'; // Default is "imessage"
+  /**
+   * Timeout in seconds (minimum 5 seconds)
+   * @example 30
+   */
+  timeout?: number;
+
+  /**
+   * Message service type (default: 'imessage')
+   * Note: SMS has limitations (no effects, subjects, etc.)
+   */
+  service?: 'imessage' | 'sms';
 
   // Callback/webhook parameters
-  status_callback?: string; // URL for webhook status updates
-  status_callback_header?: string; // Custom header for webhook
-  passthrough?: string; // Metadata (max 1000 chars, included in webhooks)
+  /**
+   * HTTPS URL for webhook status updates
+   * @example 'https://yourapp.com/webhooks/status'
+   */
+  status_callback?: string;
+
+  /**
+   * Custom header for webhook requests
+   * @example 'Bearer your-api-key'
+   */
+  status_callback_header?: string;
+
+  /**
+   * Custom metadata (max 1,000 chars, included in webhooks)
+   * @example JSON.stringify({ userId: '123', campaign: 'welcome' })
+   */
+  passthrough?: string;
 }
 
 // -----------------------------------------------------------------------------

@@ -210,3 +210,122 @@ export function validateService(service?: string): boolean {
 
   return true;
 }
+
+// -----------------------------------------------------------------------------
+// Phone Number Utilities
+// -----------------------------------------------------------------------------
+
+/**
+ * Check if a string looks like a phone number (starts with + and has digits)
+ * This is a non-throwing version for checking before sending
+ *
+ * @param value - String to check
+ * @returns True if it looks like a phone number format
+ * @example
+ * ```typescript
+ * import { isPhoneNumber } from 'loopmessage-sdk';
+ *
+ * if (isPhoneNumber('+1234567890')) {
+ *   console.log('Valid phone format');
+ * }
+ * ```
+ */
+export function isPhoneNumber(value: string): boolean {
+  return VALIDATION.PHONE_REGEX.test(value);
+}
+
+/**
+ * Check if a string looks like an email address
+ * This is a non-throwing version for checking before sending
+ *
+ * @param value - String to check
+ * @returns True if it looks like an email format
+ * @example
+ * ```typescript
+ * import { isEmail } from 'loopmessage-sdk';
+ *
+ * if (isEmail('user@example.com')) {
+ *   console.log('Valid email format');
+ * }
+ * ```
+ */
+export function isEmail(value: string): boolean {
+  return VALIDATION.EMAIL_REGEX.test(value);
+}
+
+/**
+ * Format a phone number for the Loop API by ensuring it has the + prefix
+ *
+ * @param phone - Phone number to format
+ * @returns Formatted phone number with + prefix
+ * @throws {LoopMessageError} If the phone number format is invalid
+ * @example
+ * ```typescript
+ * import { formatPhoneNumber } from 'loopmessage-sdk';
+ *
+ * const formatted = formatPhoneNumber('1234567890'); // Returns '+1234567890'
+ * const alreadyFormatted = formatPhoneNumber('+1234567890'); // Returns '+1234567890'
+ * ```
+ */
+export function formatPhoneNumber(phone: string): string {
+  // Remove any spaces, dashes, or parentheses
+  const cleaned = phone.replace(/[\s\-()]/g, '');
+
+  // Add + if not present
+  const withPlus = cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
+
+  // Validate the result
+  validatePhoneNumber(withPlus);
+
+  return withPlus;
+}
+
+/**
+ * Get the country code from a phone number
+ *
+ * @param phone - Phone number with country code
+ * @returns Country code (e.g., '1' for US/Canada, '44' for UK)
+ * @throws {LoopMessageError} If the phone number format is invalid
+ * @example
+ * ```typescript
+ * import { getCountryCode } from 'loopmessage-sdk';
+ *
+ * const code = getCountryCode('+1234567890'); // Returns '1'
+ * const ukCode = getCountryCode('+447700900123'); // Returns '44'
+ * ```
+ */
+export function getCountryCode(phone: string): string {
+  validatePhoneNumber(phone);
+
+  // Remove the + and extract likely country codes
+  const digits = phone.slice(1);
+
+  // Common country code patterns
+  if (digits.startsWith('1')) return '1'; // US/Canada
+  if (digits.startsWith('44')) return '44'; // UK
+  if (digits.startsWith('33')) return '33'; // France
+  if (digits.startsWith('49')) return '49'; // Germany
+  if (digits.startsWith('39')) return '39'; // Italy
+  if (digits.startsWith('34')) return '34'; // Spain
+  if (digits.startsWith('81')) return '81'; // Japan
+  if (digits.startsWith('82')) return '82'; // South Korea
+  if (digits.startsWith('86')) return '86'; // China
+  if (digits.startsWith('91')) return '91'; // India
+
+  // For other countries, assume 1-3 digit country codes
+  if (digits.length >= 10) {
+    // Likely 1-digit country code
+    return digits[0];
+  }
+  if (digits.length >= 9) {
+    // Likely 2-digit country code
+    return digits.slice(0, 2);
+  }
+  if (digits.length >= 8) {
+    // Likely 3-digit country code
+    return digits.slice(0, 3);
+  }
+
+  // Default to single digit
+  return digits[0];
+}
