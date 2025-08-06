@@ -11,8 +11,8 @@ import type {
   MessageReaction,
   SendMessageParams,
 } from '../types.js';
-import { LoopHttpClient } from '../utils/loopHttpClient.js';
-import { EventService } from '../utils/eventService.js';
+import { LoopHttpClient } from '../utils/LoopHttpClient.js';
+import { EventService } from '../utils/EventService.js';
 import * as validators from '../utils/validators.js';
 
 // Message event names - exported from constants

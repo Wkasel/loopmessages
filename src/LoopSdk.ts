@@ -15,8 +15,8 @@ import { LoopMessageService, MESSAGE_EVENTS } from './services/LoopMessageServic
 import { MessageStatusChecker, STATUS_EVENTS } from './services/LoopMessageStatus.js';
 import { WebhookHandler, WEBHOOK_EVENTS } from './services/LoopMessageWebhooks.js';
 import { LoopMessageConversationService, CONVERSATION_EVENTS } from './LoopMessageConversation.js';
-import { EventService } from './utils/eventService.js';
-import type { LogLevel } from './utils/logger.js';
+import { EventService } from './utils/EventService.js';
+import type { LogLevel } from './utils/Logger.js';
 
 // Export events from services for external use
 export const EVENTS = {

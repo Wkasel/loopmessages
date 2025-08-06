@@ -5,8 +5,8 @@ import { API, DEFAULTS, MESSAGE_STATUS, EVENTS } from '../constants.js';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import type { StatusServiceConfig } from '../LoopCredentials.js';
 import type { MessageStatus, MessageStatusResponse } from '../types.js';
-import { LoopHttpClient } from '../utils/loopHttpClient.js';
-import { EventService } from '../utils/eventService.js';
+import { LoopHttpClient } from '../utils/LoopHttpClient.js';
+import { EventService } from '../utils/EventService.js';
 
 // Status update event names - exported from constants
 export const STATUS_EVENTS = EVENTS.STATUS;

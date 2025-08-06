@@ -5,7 +5,7 @@ import * as crypto from 'crypto';
 import { LoopMessageError } from '../errors/LoopMessageError.js';
 import type { WebhookConfig } from '../LoopCredentials.js';
 import type { WebhookPayload } from '../types.js';
-import { EventService } from '../utils/eventService.js';
+import { EventService } from '../utils/EventService.js';
 import { EVENTS, ERROR_MESSAGES } from '../constants.js';
 
 // Webhook event names - exported from constants
