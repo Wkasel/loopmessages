@@ -22,7 +22,7 @@ const WEBHOOK_SECRET_KEY = process.env.WEBHOOK_SECRET_KEY || 'YOUR_WEBHOOK_SECRE
 const SENDER_NAME = process.env.SENDER_NAME || 'your.sender@imsg.co';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY';
 const PORT = process.env.PORT || 3000;
-const EXPECTED_BEARER_TOKEN = 'omnydeveloper'; // Your configured static token
+const EXPECTED_BEARER_TOKEN = process.env.WEBHOOK_BEARER_TOKEN || 'your-bearer-token'; // Your configured static token
 
 // Basic validation
 if (

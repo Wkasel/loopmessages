@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Test webhook with a sample message
-curl -X POST https://6215-2605-59c0-2057-7008-19fc-ebbe-688b-c08c.ngrok-free.app/webhooks/loopmessage \
+curl -X POST https://your-ngrok-url.ngrok-free.app/webhooks/loopmessage \
   -H "Content-Type: application/json" \
-  -H "Authorization: omnydeveloper" \
+  -H "Authorization: your-bearer-token" \
   -d '{
     "alert_type": "message_inbound",
     "delivery_type": "imessage",
@@ -14,7 +14,7 @@ curl -X POST https://6215-2605-59c0-2057-7008-19fc-ebbe-688b-c08c.ngrok-free.app
     "message_id": "test-message-123",
     "message_type": "text",
     "recipient": "+1234567890",
-    "sender_name": "will@a.imsg.co",
+    "sender_name": "sender@example.imsg.co",
     "text": "Hello from curl test!",
     "webhook_id": "test-webhook-123",
     "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"

@@ -106,11 +106,11 @@ app.post(
       const parts = authorizationHeader.split(' ');
 
       if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-        // Format: "Bearer omnydeveloper"
+        // Format: "Bearer your-token"
         authorized = parts[1] === EXPECTED_BEARER_TOKEN;
         authDebugInfo = `Bearer format - Token: "${parts[1]}", Expected: "${EXPECTED_BEARER_TOKEN}", Match: ${authorized}`;
       } else if (parts.length === 1) {
-        // Format: "omnydeveloper" (Loop Message sends just the value)
+        // Format: "your-token" (Loop Message sends just the value)
         authorized = authorizationHeader === EXPECTED_BEARER_TOKEN;
         authDebugInfo = `Direct format - Token: "${authorizationHeader}", Expected: "${EXPECTED_BEARER_TOKEN}", Match: ${authorized}`;
       } else {
