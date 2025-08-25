@@ -1,0 +1,261 @@
+# LoopMessage SDK - AI Agent Integration Guide
+
+## Overview
+The LoopMessage SDK is a TypeScript library for sending iMessages and SMS programmatically through the LoopMessage API. This file provides AI agents with key information for effective integration.
+
+## Quick Start for AI Agents
+```typescript
+import { LoopSdk } from 'loopmessage-sdk';
+
+const sdk = new LoopSdk({
+  loopAuthKey: 'YOUR_AUTH_KEY',
+  loopSecretKey: 'YOUR_SECRET_KEY', 
+  senderName: 'your.sender@imsg.co'
+});
+
+// Send a message
+await sdk.sendMessage({
+  recipient: '+1234567890',
+  text: 'Hello from AI!'
+});
+```
+
+## Core Capabilities for AI Integration
+
+### 1. Message Sending
+- `sendMessage()` - Basic text messages
+- `sendMessageWithEffect()` - Visual effects (confetti, fireworks, etc.)
+- `sendAudioMessage()` - Voice messages
+- `sendReaction()` - Tapback reactions (love, like, laugh, etc.)
+- `sendReply()` - Reply to specific messages
+
+### 2. Status Tracking
+- `checkMessageStatus()` - Get current delivery status
+- `waitForMessageStatus()` - Poll until specific status reached
+- Event-driven status updates via EventEmitter
+
+### 3. Webhook Processing
+- `parseWebhook()` - Process incoming messages/reactions
+- Built-in signature verification for security
+- Express middleware for easy server integration
+
+### 4. Phone Number Validation
+- `isPhoneNumber()` - Validate phone format
+- `formatPhoneNumber()` - Auto-format with country code
+- `getCountryCode()` - Extract country codes
+
+## AI Agent Best Practices
+
+### Message Personalization
+```typescript
+// Use recipient's name when available
+await sdk.sendMessage({
+  recipient: userPhone,
+  text: `Hi ${userName}, your order #${orderId} has shipped! 📦`
+});
+```
+
+### Status Monitoring
+```typescript
+// Always monitor delivery for important messages
+const result = await sdk.sendMessage({
+  recipient: userPhone,
+  text: 'Important: Your appointment is tomorrow at 3pm'
+});
+
+// Wait for delivery confirmation
+const status = await sdk.waitForMessageStatus(result.message_id, 'sent');
+if (status.status !== 'sent') {
+  // Handle delivery failure - maybe try SMS fallback
+  console.log(`Message failed: ${status.error_code}`);
+}
+```
+
+### Error Handling
+```typescript
+import { LoopMessageError } from 'loopmessage-sdk';
+
+try {
+  await sdk.sendMessage(params);
+} catch (error) {
+  if (error instanceof LoopMessageError) {
+    // Handle specific Loop API errors
+    switch (error.code) {
+      case 401: 
+        console.log('Authentication failed');
+        break;
+      case 429:
+        console.log('Rate limited - retry later');
+        break;
+      default:
+        console.log(`API error: ${error.message}`);
+    }
+  }
+}
+```
+
+### Webhook Integration for Conversational AI
+```typescript
+import express from 'express';
+import { handleLoopWebhook } from 'loopmessage-sdk';
+
+const app = express();
+
+// Simple webhook handler for AI responses
+app.post('/webhooks/loop', handleLoopWebhook({
+  secretKey: 'YOUR_WEBHOOK_SECRET',
+  onMessage: async (payload) => {
+    const userMessage = payload.text;
+    const sender = payload.from;
+    
+    // Process with your AI model
+    const aiResponse = await processWithAI(userMessage);
+    
+    // Send AI response
+    await sdk.sendMessage({
+      recipient: sender,
+      text: aiResponse
+    });
+    
+    return { typing: 3, read: true };
+  }
+}));
+```
+
+## Message Types & Effects
+
+### Visual Effects (iMessage only)
+- `'confetti'` - Party celebration
+- `'fireworks'` - Big announcements  
+- `'balloons'` - Birthday/celebration
+- `'love'` - Romantic messages
+- `'lasers'` - Fun/gaming contexts
+- `'slam'` - Urgent/important
+- `'loud'` - Attention-getting
+- `'gentle'` - Subtle/calm
+
+### Reactions (Tapbacks)
+- `'love'` - ❤️ Heart reaction
+- `'like'` - 👍 Thumbs up
+- `'dislike'` - 👎 Thumbs down  
+- `'laugh'` - 😂 Laughing
+- `'exclaim'` - ‼️ Exclamation
+- `'question'` - ❓ Question mark
+
+## Common AI Agent Use Cases
+
+### 1. Customer Support Bot
+```typescript
+// Monitor for support requests
+sdk.on('message_inbound', async (payload) => {
+  if (payload.text?.toLowerCase().includes('help')) {
+    await sdk.sendMessage({
+      recipient: payload.from,
+      text: 'I can help! What do you need assistance with?'
+    });
+  }
+});
+```
+
+### 2. Appointment Reminders  
+```typescript
+// Send reminder with confirmation request
+const result = await sdk.sendMessage({
+  recipient: customerPhone,
+  text: 'Reminder: Dentist appointment tomorrow at 2pm. Reply YES to confirm or RESCHEDULE to change.'
+});
+
+// Wait for response via webhook
+```
+
+### 3. Order Notifications
+```typescript
+// Send with appropriate effect for order status
+await sdk.sendMessageWithEffect({
+  recipient: customerPhone,
+  text: '🎉 Your order has been delivered!',
+  effect: 'confetti'
+});
+```
+
+### 4. AI Assistant Conversations
+```typescript
+// Maintain conversation context
+const conversationHistory = new Map();
+
+app.post('/webhook', handleLoopWebhook({
+  secretKey: process.env.WEBHOOK_SECRET,
+  onMessage: async (payload) => {
+    const { from, text } = payload;
+    
+    // Get conversation history
+    const history = conversationHistory.get(from) || [];
+    history.push({ role: 'user', content: text });
+    
+    // Generate AI response
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant via iMessage.' },
+        ...history
+      ]
+    });
+    
+    const aiMessage = response.choices[0].message.content;
+    
+    // Send response
+    await sdk.sendMessage({
+      recipient: from,
+      text: aiMessage
+    });
+    
+    // Update history
+    history.push({ role: 'assistant', content: aiMessage });
+    conversationHistory.set(from, history.slice(-10)); // Keep last 10 messages
+    
+    return { typing: 2, read: true };
+  }
+}));
+```
+
+## Rate Limits & Best Practices
+- Default limit: 100 requests/minute
+- SDK includes automatic retry with exponential backoff
+- Use status polling sparingly - prefer webhooks for real-time updates
+- Cache user preferences to avoid repeated API calls
+
+## Testing & Development
+```typescript
+// Enable debug logging during development
+const sdk = new LoopSdk({
+  // ... credentials
+  logLevel: 'debug'
+});
+
+// Use test phone numbers (check LoopMessage docs for test numbers)
+const TEST_PHONE = process.env.TEST_PHONE || '+1234567890';
+```
+
+## Environment Variables for AI Agents
+```bash
+LOOP_AUTH_KEY=your_auth_key
+LOOP_SECRET_KEY=your_secret_key
+LOOP_SENDER_NAME=your.sender@imsg.co
+WEBHOOK_SECRET_KEY=your_webhook_secret
+LOG_LEVEL=info
+```
+
+## Documentation Links
+- GitHub: https://github.com/wkasel/loopmessages
+- NPM: https://www.npmjs.com/package/loopmessage-sdk
+- Examples: /examples directory in repository
+- LoopMessage API Docs: https://docs.loopmessage.com/
+
+## TypeScript Support
+Full TypeScript definitions included for excellent IDE integration:
+- Auto-completion for all method parameters
+- Type-safe message effects and reactions
+- Comprehensive error types
+- Event payload typing
+
+This SDK is designed to make iMessage/SMS integration seamless for AI agents while maintaining type safety and providing comprehensive error handling.

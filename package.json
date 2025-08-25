@@ -1,6 +1,6 @@
 {
   "name": "loopmessage-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unofficial TypeScript SDK for the Loop Message API",
   "module": "dist/index.js",
   "main": "dist/index.js",
@@ -25,7 +25,8 @@
     "dist",
     "LICENSE",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LLMs.txt"
   ],
   "scripts": {
     "build": "tsc",
@@ -57,7 +58,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wkasel/loopmessages.git"
+    "url": "git+https://github.com/wkasel/loopmessages.git"
   },
   "devDependencies": {
     "@types/express": "^5.0.1",
