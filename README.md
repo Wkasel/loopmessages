@@ -25,8 +25,18 @@ npm install loopmessage-sdk
 
 ## Quick Start with the Unified SDK
 
+### ES Modules (Modern Node.js, TypeScript, Bundlers)
 ```typescript
 import { LoopSdk, EVENTS } from 'loopmessage-sdk';
+```
+
+### CommonJS (Traditional Node.js)
+```javascript  
+const { LoopSdk, EVENTS } = require('loopmessage-sdk');
+```
+
+### Basic Usage
+```typescript
 
 // Initialize the SDK
 const sdk = new LoopSdk({

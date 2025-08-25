@@ -1,24 +1,41 @@
 {
   "name": "loopmessage-sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unofficial TypeScript SDK for the Loop Message API",
-  "module": "dist/index.js",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./services/*": {
-      "types": "./dist/services/*.d.ts",
-      "import": "./dist/services/*.js"
+      "import": {
+        "types": "./dist/esm/services/*.d.ts",
+        "default": "./dist/esm/services/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/services/*.d.ts", 
+        "default": "./dist/cjs/services/*.js"
+      }
     },
     "./utils/*": {
-      "types": "./dist/utils/*.d.ts",
-      "import": "./dist/utils/*.js"
+      "import": {
+        "types": "./dist/esm/utils/*.d.ts",
+        "default": "./dist/esm/utils/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/utils/*.d.ts",
+        "default": "./dist/cjs/utils/*.js"
+      }
     }
   },
   "files": [
@@ -29,7 +46,10 @@
     "LLMs.txt"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:esm && npm run build:cjs && npm run fix-cjs-extensions",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "fix-cjs-extensions": "node scripts/fix-cjs-extensions.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
