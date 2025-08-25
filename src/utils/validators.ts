@@ -17,6 +17,7 @@ export function validateRecipient(recipient?: string): boolean {
   }
 
   // Check for email format
+  // TODO: we should also extend this for phone numbers (imessage).
   if (recipient.includes('@')) {
     return validateEmail(recipient);
   }
