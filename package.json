@@ -1,7 +1,7 @@
 {
   "name": "loopmessage-sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the Loop Message API",
+  "description": "Unofficial TypeScript SDK for the Loop Message API",
   "module": "dist/index.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
